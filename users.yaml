@@ -8,8 +8,8 @@ credentials:
       name: Administrátor
       password: admin123
       role: admin
-    opice:
-      name: Jan
+    alica:
+      name: Alica Fedoriková
       password: '1234'
       role: normal
 preauthorized: []
