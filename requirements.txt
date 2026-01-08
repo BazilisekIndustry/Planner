@@ -4,5 +4,5 @@ pyyaml
 reportlab
 plotly
 pandas
-st-aggrid
+streamlit-aggrid
 supabase
