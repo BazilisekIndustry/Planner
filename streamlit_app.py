@@ -287,6 +287,25 @@ def delete_task(task_id):
         st.error(f"Chyba při mazání úkolu: {str(e)}")
         print(f"Delete task error: {e}")  # Pro debug v logu
         return False
+# Servisní funkce pro smazání celého projektu (pouze pro admin)
+def delete_project(project_id):
+    try:
+        # Nejprve najdeme všechny úkoly tohoto projektu
+        tasks_response = supabase.table('tasks').select('id').eq('project_id', project_id).execute()
+        
+        # Pro každý úkol smažeme nejdříve jeho change_log záznamy a pak úkol samotný
+        for task in tasks_response.data:
+            supabase.table('change_log').delete().eq('task_id', task['id']).execute()
+            supabase.table('tasks').delete().eq('id', task['id']).execute()
+        
+        # Nakonec smažeme samotný projekt
+        supabase.table('projects').delete().eq('id', project_id).execute()
+        
+        return True
+    except Exception as e:
+        st.error(f"Chyba při mazání projektu {project_id}: {str(e)}")
+        print(f"Delete project error: {e}")
+        return False
 # ============================
 # USER MANAGEMENT FUNKCE
 # ============================
@@ -779,6 +798,39 @@ if st.session_state.get('authentication_status'):
                 "Role": details.get('role', 'viewer')
             })
         st.table(users_data)
+
+                # ============================
+        # Smazání celého projektu (pouze admin)
+        # ============================
+        st.markdown("### Smazání celého projektu (neodvolatelné!)")
+        project_choices = get_project_choices()
+        if project_choices:
+            proj_to_delete = st.selectbox(
+                "Vyberte projekt k úplnému smazání (včetně všech úkolů)",
+                project_choices,
+                key="admin_delete_project_select"
+            )
+            # Získáme název projektu pro lepší info
+            proj_name = "bez názvu"
+            for pid, pname in get_projects():
+                if pid == proj_to_delete:
+                    proj_name = pname
+                    break
+            
+            st.warning(f"""
+                **Pozor!** Bude smazán celý projekt **{proj_to_delete} – {proj_name}**  
+                včetně **všech jeho úkolů** a všech záznamů v historii změn.  
+                Tuto akci nelze vrátit zpět!
+            """)
+            
+            if st.checkbox("Potvrzuji, že chci trvale smazat tento projekt i s úkoly", key="confirm_proj_delete"):
+                if st.button("SMAZAT CELÝ PROJEKT", type="primary"):
+                    if delete_project(proj_to_delete):
+                        st.success(f"Projekt {proj_to_delete} byl úspěšně a kompletně smazán.")
+                        st.rerun()
+                    # else: chyba už je zobrazena ve funkci delete_project
+        else:
+            st.info("Žádné projekty k mazání.")
 
     # ============================
     # 3. HMG MĚSÍČNÍ – Gantt + plný export do PDF
