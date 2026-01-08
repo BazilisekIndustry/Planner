@@ -274,8 +274,19 @@ def mark_all_collisions():
 
 # Servisní funkce pro smazání úkolu (pro testování)
 def delete_task(task_id):
-    supabase.table('tasks').delete().eq('id', task_id).execute()
-    return True
+    try:
+        # Nejprve smažeme záznamy v change_log (kvůli foreign key)
+        supabase.table('change_log').delete().eq('task_id', task_id).execute()
+        
+        # Pak smažeme samotný úkol
+        supabase.table('tasks').delete().eq('id', task_id).execute()
+        
+        return True
+    except Exception as e:
+        # Lepší zpracování chyby – můžeš logovat nebo zobrazit detail
+        st.error(f"Chyba při mazání úkolu: {str(e)}")
+        print(f"Delete task error: {e}")  # Pro debug v logu
+        return False
 # ============================
 # USER MANAGEMENT FUNKCE
 # ============================
