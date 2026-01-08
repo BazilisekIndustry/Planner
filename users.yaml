@@ -1,0 +1,15 @@
+cookie:
+  expiry_days: 30
+  key: planner_streamlit_secret_key
+  name: planner_auth_cookie
+credentials:
+  usernames:
+    admin:
+      name: Administrátor
+      password: admin123
+      role: admin
+    opice:
+      name: Jan
+      password: '1234'
+      role: normal
+preauthorized: []
