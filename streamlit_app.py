@@ -255,7 +255,7 @@ def get_colliding_projects(task_id):
     wp = task['workplace_id']
     start = datetime.strptime(task['start_date'], '%Y-%m-%d').date()
     end = datetime.strptime(task['end_date'], '%Y-%m-%d').date()
-    response = supabase.table('tasks').select('project_id').eq('workplace_id', wp).neq('id', task_id).neq('start_date', None).neq('end_date', None).execute()
+    response = supabase.table('tasks').select('project_id').eq('workplace_id', wp).neq('id', task_id).not_.is_('start_date', 'null').not_.is_('end_date', 'null').execute()
     colliding = []
     for row in response.data:
         row_start = datetime.strptime(row['start_date'], '%Y-%m-%d').date()
@@ -268,7 +268,7 @@ def check_collisions(task_id):
     return len(get_colliding_projects(task_id)) > 0
 
 def mark_all_collisions():
-    response = supabase.table('tasks').select('id').neq('start_date', None).neq('end_date', None).execute()
+    response = supabase.table('tasks').select('id').not_.is_('start_date', 'null').not_.is_('end_date', 'null').execute()
     ids = [row['id'] for row in response.data]
     return {tid: check_collisions(tid) for tid in ids}
 
@@ -763,7 +763,7 @@ if st.session_state.get('authentication_status'):
         num_days = last_day.day
 
         # Načti úkoly
-        response = supabase.table('tasks').select('*').neq('start_date', None).neq('end_date', None).execute()
+        response = supabase.table('tasks').select('*').not_.is_('start_date', 'null').not_.is_('end_date', 'null').execute()
         all_tasks = response.data
 
         plot_data = []
@@ -953,7 +953,7 @@ if st.session_state.get('authentication_status'):
 
         occupancy = {wp_name: [0.0 for _ in range(12)] for _, wp_name in workplaces}
 
-        response = supabase.table('tasks').select('id, workplace_id, hours, capacity_mode, start_date, end_date, status').neq('start_date', None).neq('end_date', None).execute()
+        response = supabase.table('tasks').select('id, workplace_id, hours, capacity_mode, start_date, end_date, status').not_.is_('start_date', 'null').not_.is_('end_date', 'null').execute()
         tasks = response.data
 
         for t in tasks:
