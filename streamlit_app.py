@@ -624,7 +624,17 @@ if st.session_state.get('authentication_status'):
                     collisions = mark_all_collisions()
 
                     for t in tasks:
-                        tid, pid, order, wp_id, hours, mode, start_int, end_int, status, notes, reason = t
+                        tid = t['id']
+                        pid = t['project_id']
+                        order = t['order_number']
+                        wp_id = t['workplace_id']
+                        hours = t['hours']
+                        mode = t['capacity_mode']
+                        start_int = t['start_date']
+                        end_int = t['end_date']
+                        status = t['status']
+                        notes = t['notes']
+                        reason = t['reason']
                         wp_name = get_workplace_name(wp_id)
                         start_disp = yyyymmdd_to_ddmmyyyy(start_int) if start_int else ""
                         end_disp = yyyymmdd_to_ddmmyyyy(end_int) if end_int else ""
