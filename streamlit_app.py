@@ -400,7 +400,8 @@ if st.session_state.get('authentication_status'):
 
     # Menu závisí na roli
     options = [
-        "Přidat / Správa pracovišť",
+        "Správa pracovišť",
+        "Přidat projekt / úkol",
         "Prohlížet / Upravovat úkoly",
         "HMG měsíční",
         "HMG roční",
@@ -414,11 +415,11 @@ if st.session_state.get('authentication_status'):
     # ============================
     # 1. PŘIDAT / SPRÁVA PRACOVIŠŤ
     # ============================
-    if option == "Přidat / Správa pracovišť":
-        st.header("Správa pracovišť a přidávání projektů")
+    if option == "Správa pracovišť":
+        st.header("Správa pracovišť")
 
-        if read_only:
-            st.warning("V režimu prohlížení nelze provádět úpravy.")
+        if role != 'admin':
+            st.error("Přístup jen pro administrátory.")
         else:
             col1, col2 = st.columns(2)
 
@@ -464,81 +465,104 @@ if st.session_state.get('authentication_status'):
                 else:
                     st.info("Žádné pracoviště.")
 
-        st.markdown("---")
-        st.subheader("Přidat úkol")
-
-        if read_only:
-            st.warning("V režimu prohlížení nelze přidávat úkoly.")
+    # ============================
+    # 2. PŘIDAT PROJEKT / ÚKOL (admin + normal)
+    # ============================
+    # 2. PŘIDAT PROJEKT / ÚKOL (admin + normal)
+    # ============================
+    elif option == "Přidat projekt / úkol":
+        if role == 'viewer':
+            st.error("Přístup jen pro administrátory a normální uživatele.")
         else:
-            with st.form(key="add_task_form"):
-                col1, col2 = st.columns(2)
+            st.header("Přidat projekt a úkol")
 
-                with col1:
-                    project_choices = get_project_choices()
-                    if not project_choices:
-                        st.warning("Nejprve přidejte projekt.")
-                        project_id = None
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.subheader("Přidat projekt")
+                proj_id = st.text_input("Číslo projektu (povinné)")
+                proj_name = st.text_input("Název projektu (volitelné)")
+                if st.button("Přidat projekt"):
+                    if proj_id.strip():
+                        if add_project(proj_id.strip(), proj_name.strip()):
+                            st.success(f"Projekt {proj_id} přidán!")
+                            st.rerun()
+                        else:
+                            st.error("Projekt již existuje.")
                     else:
-                        project_id = st.selectbox("Projekt", project_choices, key="add_proj")
+                        st.error("Zadejte číslo projektu.")
 
-                    order_number = st.number_input("Pořadí úkolu", min_value=1, step=1)
+            with col2:
+                st.subheader("Přidat úkol")
+                with st.form(key="add_task_form"):
+                    col1, col2 = st.columns(2)
 
-                    wp_names = [name for _, name in get_workplaces()]
-                    wp_name = st.selectbox("Pracoviště", wp_names)
-                    wp_id = next((wid for wid, name in get_workplaces() if name == wp_name), None)
+                    with col1:
+                        project_choices = get_project_choices()
+                        if not project_choices:
+                            st.warning("Nejprve přidejte projekt.")
+                            project_id = None
+                        else:
+                            project_id = st.selectbox("Projekt", project_choices, key="add_proj")
 
-                    hours = st.number_input("Počet hodin", min_value=0.5, step=0.5, format="%.1f")
+                        order_number = st.number_input("Pořadí úkolu", min_value=1, step=1)
 
-                with col2:
-                    capacity_mode = st.radio("Režim kapacity", ['7.5', '24'], horizontal=True)
+                        wp_names = [name for _, name in get_workplaces()]
+                        wp_name = st.selectbox("Pracoviště", wp_names)
+                        wp_id = next((wid for wid, name in get_workplaces() if name == wp_name), None)
 
-                    start_date_obj = st.date_input("Začátek (volitelné)", value=None, format="DD.MM.YYYY")
-                    start_ddmmyyyy = start_date_obj.strftime('%d.%m.%Y') if start_date_obj else None
+                        hours = st.number_input("Počet hodin", min_value=0.5, step=0.5, format="%.1f")
 
-                    notes = st.text_area("Poznámka")
+                    with col2:
+                        capacity_mode = st.radio("Režim kapacity", ['7.5', '24'], horizontal=True)
 
-                submitted = st.form_submit_button("Přidat úkol")
-                if submitted:
-                    if not project_id:
-                        st.error("Vyberte projekt.")
-                    elif not wp_id:
-                        st.error("Vyberte pracoviště.")
-                    elif hours <= 0:
-                        st.error("Zadejte platný počet hodin.")
-                    elif not is_order_unique(project_id, int(order_number)):
-                        st.error(f"Pořadí {order_number} v projektu {project_id} již existuje – zadejte unikátní pořadí.")
-                    else:
-                        try:
-                            task_id = add_task(
-                                project_id=project_id,
-                                order_number=int(order_number),
-                                workplace_id=wp_id,
-                                hours=float(hours),
-                                mode=capacity_mode,
-                                start_ddmmyyyy=start_ddmmyyyy,
-                                notes=notes
-                            )
+                        start_date_obj = st.date_input("Začátek (volitelné)", value=None, format="DD.MM.YYYY")
+                        start_ddmmyyyy = start_date_obj.strftime('%d.%m.%Y') if start_date_obj else None
 
-                            if check_collisions(task_id):
-                                colliding = get_colliding_projects(task_id)
-                                st.warning(f"⚠️ Kolize s projekty: {', '.join(colliding)}")
-                                col_y, col_n = st.columns(2)
-                                if col_y.button("Přesto přidat"):
-                                    st.success("Úkol přidán i přes kolizi.")
+                        notes = st.text_area("Poznámka")
+
+                    submitted = st.form_submit_button("Přidat úkol")
+                    if submitted:
+                        if not project_id:
+                            st.error("Vyberte projekt.")
+                        elif not wp_id:
+                            st.error("Vyberte pracoviště.")
+                        elif hours <= 0:
+                            st.error("Zadejte platný počet hodin.")
+                        elif not is_order_unique(project_id, int(order_number)):
+                            st.error(f"Pořadí {order_number} v projektu {project_id} již existuje – zadejte unikátní pořadí.")
+                        else:
+                            try:
+                                task_id = add_task(
+                                    project_id=project_id,
+                                    order_number=int(order_number),
+                                    workplace_id=wp_id,
+                                    hours=float(hours),
+                                    mode=capacity_mode,
+                                    start_ddmmyyyy=start_ddmmyyyy,
+                                    notes=notes
+                                )
+
+                                if check_collisions(task_id):
+                                    colliding = get_colliding_projects(task_id)
+                                    st.warning(f"⚠️ Kolize s projekty: {', '.join(colliding)}")
+                                    col_y, col_n = st.columns(2)
+                                    if col_y.button("Přesto přidat"):
+                                        st.success("Úkol přidán i přes kolizi.")
+                                        st.rerun()
+                                    if col_n.button("Zrušit"):
+                                        delete_task(task_id)
+                                        st.info("Přidání zrušeno.")
+                                else:
+                                    st.success("Úkol úspěšně přidán!")
                                     st.rerun()
-                                if col_n.button("Zrušit"):
-                                    delete_task(task_id)
-                                    st.info("Přidání zrušeno.")
-                            else:
-                                st.success("Úkol úspěšně přidán!")
-                                st.rerun()
-                        except Exception as e:
-                            st.error(f"Chyba: {e}")
+                            except Exception as e:
+                                st.error(f"Chyba: {e}")
 
     # ============================
-    # 2. PROHLÍŽET / UPRAVOVAT ÚKOLY
+    # 3. PROHLÍŽET / UPRAVOVAT ÚKOLY
     # ============================
-    elif option == "Prohlížet / Upravovat úkoly":
+    elif option == "ProhlíŽet / Upravovat úkoly":
         st.header("Prohlížet / Upravovat úkoly")
 
         if read_only:
