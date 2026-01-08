@@ -381,6 +381,9 @@ authenticator = stauth.Authenticate(
 st.set_page_config(page_title="Plánovač Horkých komor CVŘ", page_icon=":radioactive:",layout="wide")
 st.title("Plánovač Horkých komor CVŘ")
 
+if not st.session_state.get('authentication_status'):
+    st.markdown("Vítejte v Plánovači Horkých komor CVŘ. Přihlaste se prosím. \n\n Pro založení nového uživatele kontaktuje petr.svrcula@cvrez.cz.")
+
 authenticator.login(location='main')
 
 if st.session_state.get('authentication_status'):
@@ -1064,11 +1067,9 @@ if st.session_state.get('authentication_status'):
             st.dataframe(combined, width='stretch')
 
 elif st.session_state.get('authentication_status') is False:
-    st.markdown("Vítejte v Plánovači Horkých komor CVŘ. Přihlaste se prosím. \n\n Pro založení nového uživatele kontaktuje petr.svrcula@cvrez.cz.")
     st.error("Nesprávné přihlašovací údaje")
 
 elif st.session_state.get('authentication_status') is None:
-    st.markdown("Vítejte v Plánovači Horkých komor CVŘ. Přihlaste se prosím. \n\n Pro založení nového uživatele kontaktuje petr.svrcula@cvrez.cz.")
     st.warning("Přihlaste se prosím")
 
 # ============================
