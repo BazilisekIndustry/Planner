@@ -1,0 +1,8 @@
+streamlit
+streamlit-authenticator
+pyyaml
+reportlab
+plotly
+pandas
+st-aggrid
+supabase

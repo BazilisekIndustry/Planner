@@ -13,6 +13,7 @@ from reportlab.lib.units import inch
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 import hashlib  # Pro hashování hesel
+from supabase import create_client
 
 # ============================
 # KONFIGURACE
@@ -20,6 +21,11 @@ import hashlib  # Pro hashování hesel
 DB_FILE = 'planner.db'
 USERS_FILE = 'users.yaml'
 LOCK_FILE = 'planner.lock'
+
+# Supabase klient
+SUPABASE_URL = st.secrets["supabase_url"]
+SUPABASE_KEY = st.secrets["supabase_key"]
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Registrace fontu pro PDF
 try:
@@ -125,182 +131,111 @@ def calculate_end_date(start_yyyymmdd, hours, mode):
 # DATABÁZOVÉ FUNKCE
 # ============================
 def init_db():
-    conn = sqlite3.connect(DB_FILE)
-    cur = conn.cursor()
-    cur.execute('''CREATE TABLE IF NOT EXISTS projects (
-        id TEXT PRIMARY KEY,
-        name TEXT
-    )''')
-    cur.execute('''CREATE TABLE IF NOT EXISTS workplaces (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT UNIQUE NOT NULL
-    )''')
-    cur.execute('''CREATE TABLE IF NOT EXISTS tasks (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        project_id TEXT,
-        order_number INTEGER,
-        workplace_id INTEGER,
-        hours REAL,
-        capacity_mode TEXT,
-        start_date TEXT,
-        end_date TEXT,
-        status TEXT DEFAULT 'pending',
-        notes TEXT,
-        reason TEXT,
-        FOREIGN KEY (project_id) REFERENCES projects(id),
-        FOREIGN KEY (workplace_id) REFERENCES workplaces(id)
-    )''')
-    cur.execute('''CREATE TABLE IF NOT EXISTS change_log (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        task_id INTEGER,
-        change_time TEXT,
-        description TEXT
-    )''')
-    default_workplaces = [
-        "HK1 Materialografie", "HK2 Žíhací pec, CNC", "HK3 EDM", "HK4 Autokláv",
-        "HK5 Lis, pyknometrie", "HK6 Přijímací", "HK7 Trhačka", "HK8 Cyklovačka",
-        "HK9 Přesné měření", "HK10 Creep", "PHK SEM", "PHK NI", "Laboratoř RKB"
-    ]
-    for name in default_workplaces:
-        cur.execute('INSERT OR IGNORE INTO workplaces (name) VALUES (?)', (name,))
-    conn.commit()
-    conn.close()
+    # Tabulky jsou už vytvořené v Supabase
+    pass
 
 def get_projects():
-    conn = sqlite3.connect(DB_FILE)
-    cur = conn.cursor()
-    cur.execute('SELECT id, name FROM projects ORDER BY id')
-    projects = cur.fetchall()
-    conn.close()
-    return projects
+    response = supabase.table('projects').select('id, name').execute()
+    return [(row['id'], row['name']) for row in response.data]
 
 def get_project_choices():
     projects = get_projects()
     return [str(p[0]) for p in projects] if projects else []
 
 def get_workplaces():
-    conn = sqlite3.connect(DB_FILE)
-    cur = conn.cursor()
-    cur.execute('SELECT id, name FROM workplaces ORDER BY id')
-    wps = cur.fetchall()
-    conn.close()
-    return wps
+    response = supabase.table('workplaces').select('id, name').execute()
+    return [(row['id'], row['name']) for row in response.data]
 
 def get_workplace_name(wp_id):
-    conn = sqlite3.connect(DB_FILE)
-    cur = conn.cursor()
-    cur.execute('SELECT name FROM workplaces WHERE id = ?', (wp_id,))
-    row = cur.fetchone()
-    conn.close()
-    return row[0] if row else f"ID {wp_id}"
+    response = supabase.table('workplaces').select('name').eq('id', wp_id).execute()
+    return response.data[0]['name'] if response.data else f"ID {wp_id}"
 
 def add_workplace(name):
     if not name.strip():
         return False
-    conn = sqlite3.connect(DB_FILE)
-    cur = conn.cursor()
     try:
-        cur.execute('INSERT INTO workplaces (name) VALUES (?)', (name.strip(),))
-        conn.commit()
+        supabase.table('workplaces').insert({'name': name.strip()}).execute()
         return True
-    except sqlite3.IntegrityError:
+    except:
         return False
-    finally:
-        conn.close()
 
 def delete_workplace(wp_id):
-    conn = sqlite3.connect(DB_FILE)
-    cur = conn.cursor()
-    cur.execute('SELECT COUNT(*) FROM tasks WHERE workplace_id = ?', (wp_id,))
-    count = cur.fetchone()[0]
-    if count > 0:
-        conn.close()
+    # Zkontrolovat, zda je použito
+    response = supabase.table('tasks').select('id').eq('workplace_id', wp_id).execute()
+    if response.data:
         return False
-    cur.execute('DELETE FROM workplaces WHERE id = ?', (wp_id,))
-    conn.commit()
-    conn.close()
+    supabase.table('workplaces').delete().eq('id', wp_id).execute()
     return True
 
 def add_project(project_id, name):
-    conn = sqlite3.connect(DB_FILE)
-    cur = conn.cursor()
     try:
-        cur.execute('INSERT INTO projects (id, name) VALUES (?, ?)', (project_id, name))
-        conn.commit()
+        supabase.table('projects').insert({'id': project_id, 'name': name}).execute()
         return True
-    except sqlite3.IntegrityError:
+    except:
         return False
-    finally:
-        conn.close()
 
 def get_tasks(project_id):
-    conn = sqlite3.connect(DB_FILE)
-    cur = conn.cursor()
-    cur.execute('SELECT * FROM tasks WHERE project_id = ? ORDER BY order_number', (project_id,))
-    tasks = cur.fetchall()
-    conn.close()
-    return tasks
+    response = supabase.table('tasks').select('*').eq('project_id', project_id).order('order_number').execute()
+    return response.data
 
 def is_order_unique(project_id, order_number, task_id=None):
-    conn = sqlite3.connect(DB_FILE)
-    cur = conn.cursor()
     if task_id:
-        cur.execute('SELECT COUNT(*) FROM tasks WHERE project_id = ? AND order_number = ? AND id != ?', (project_id, order_number, task_id))
+        response = supabase.table('tasks').select('id').eq('project_id', project_id).eq('order_number', order_number).neq('id', task_id).execute()
     else:
-        cur.execute('SELECT COUNT(*) FROM tasks WHERE project_id = ? AND order_number = ?', (project_id, order_number))
-    count = cur.fetchone()[0]
-    conn.close()
-    return count == 0
+        response = supabase.table('tasks').select('id').eq('project_id', project_id).eq('order_number', order_number).execute()
+    return len(response.data) == 0
 
 def add_task(project_id, order_number, workplace_id, hours, mode, start_ddmmyyyy=None, notes=''):
     start_yyyymmdd = ddmmyyyy_to_yyyymmdd(start_ddmmyyyy) if start_ddmmyyyy else None
-    conn = sqlite3.connect(DB_FILE)
-    cur = conn.cursor()
-    cur.execute('''INSERT INTO tasks
-        (project_id, order_number, workplace_id, hours, capacity_mode, start_date, notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?)''',
-        (project_id, order_number, workplace_id, hours, mode, start_yyyymmdd, notes))
-    task_id = cur.lastrowid
-    conn.commit()
-    conn.close()
+    data = {
+        'project_id': project_id,
+        'order_number': order_number,
+        'workplace_id': workplace_id,
+        'hours': hours,
+        'capacity_mode': mode,
+        'start_date': start_yyyymmdd,
+        'notes': notes
+    }
+    response = supabase.table('tasks').insert(data).execute()
+    task_id = response.data[0]['id']
     if start_yyyymmdd:
         recalculate_from_task(task_id)
     return task_id
 
 def update_task(task_id, field, value, is_internal=False):
-    conn = sqlite3.connect(DB_FILE)
-    cur = conn.cursor()
     if field in ('start_date', 'end_date') and value and not is_internal:
         value = ddmmyyyy_to_yyyymmdd(value)
-    cur.execute(f'UPDATE tasks SET {field} = ? WHERE id = ?', (value, task_id))
-    conn.commit()
-    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    cur.execute('INSERT INTO change_log (task_id, change_time, description) VALUES (?, ?, ?)',
-                (task_id, now, f'Updated {field} to {value}'))
-    conn.commit()
-    conn.close()
+    supabase.table('tasks').update({field: value}).eq('id', task_id).execute()
+    now = datetime.now().isoformat()
+    supabase.table('change_log').insert({'task_id': task_id, 'change_time': now, 'description': f'Updated {field} to {value}'}).execute()
 
 def get_task(task_id):
-    conn = sqlite3.connect(DB_FILE)
-    cur = conn.cursor()
-    cur.execute('SELECT * FROM tasks WHERE id = ?', (task_id,))
-    task = cur.fetchone()
-    conn.close()
-    return task
+    response = supabase.table('tasks').select('*').eq('id', task_id).execute()
+    return response.data[0] if response.data else None
 
 def recalculate_from_task(start_task_id):
     task = get_task(start_task_id)
     if not task:
         return
-    project_id = task[1]
-    tasks_sorted = sorted(get_tasks(project_id), key=lambda t: t[2])
+    project_id = task['project_id']
+    tasks_sorted = sorted(get_tasks(project_id), key=lambda t: t['order_number'])
     try:
-        idx = next(i for i, t in enumerate(tasks_sorted) if t[0] == start_task_id)
+        idx = next(i for i, t in enumerate(tasks_sorted) if t['id'] == start_task_id)
     except StopIteration:
         return
-    current_start_yyyymmdd = task[6]
+    current_start_yyyymmdd = task['start_date']
     for t in tasks_sorted[idx:]:
-        tid, pid, order, wp, hours, mode, start_int, end_int, status, notes, reason = t
+        tid = t['id']
+        pid = t['project_id']
+        order = t['order_number']
+        wp = t['workplace_id']
+        hours = t['hours']
+        mode = t['capacity_mode']
+        start_int = t['start_date']
+        end_int = t['end_date']
+        status = t['status']
+        notes = t['notes']
+        reason = t['reason']
         if status == 'done' and end_int:
             current_start_yyyymmdd = (datetime.strptime(end_int, '%Y-%m-%d') + timedelta(days=1)).strftime('%Y-%m-%d')
             continue
@@ -315,40 +250,31 @@ def recalculate_from_task(start_task_id):
 
 def get_colliding_projects(task_id):
     task = get_task(task_id)
-    if not task or not task[6] or not task[7]:
+    if not task or not task['start_date'] or not task['end_date']:
         return []
-    wp = task[3]
-    start = datetime.strptime(task[6], '%Y-%m-%d').date()
-    end = datetime.strptime(task[7], '%Y-%m-%d').date()
-    conn = sqlite3.connect(DB_FILE)
-    cur = conn.cursor()
-    cur.execute('''SELECT DISTINCT t.project_id FROM tasks t
-                  WHERE t.workplace_id = ? AND t.id != ?
-                  AND t.start_date IS NOT NULL AND t.end_date IS NOT NULL
-                  AND NOT (datetime(t.end_date) < datetime(?) OR datetime(t.start_date) > datetime(?))''',
-                (wp, task_id, task[6], task[7]))
-    colliding = [row[0] for row in cur.fetchall()]
-    conn.close()
+    wp = task['workplace_id']
+    start = datetime.strptime(task['start_date'], '%Y-%m-%d').date()
+    end = datetime.strptime(task['end_date'], '%Y-%m-%d').date()
+    response = supabase.table('tasks').select('project_id').eq('workplace_id', wp).neq('id', task_id).neq('start_date', None).neq('end_date', None).execute()
+    colliding = []
+    for row in response.data:
+        row_start = datetime.strptime(row['start_date'], '%Y-%m-%d').date()
+        row_end = datetime.strptime(row['end_date'], '%Y-%m-%d').date()
+        if not (end < row_start or start > row_end):
+            colliding.append(row['project_id'])
     return colliding
 
 def check_collisions(task_id):
     return len(get_colliding_projects(task_id)) > 0
 
 def mark_all_collisions():
-    conn = sqlite3.connect(DB_FILE)
-    cur = conn.cursor()
-    cur.execute('SELECT id FROM tasks WHERE start_date IS NOT NULL AND end_date IS NOT NULL')
-    ids = [row[0] for row in cur.fetchall()]
-    conn.close()
+    response = supabase.table('tasks').select('id').neq('start_date', None).neq('end_date', None).execute()
+    ids = [row['id'] for row in response.data]
     return {tid: check_collisions(tid) for tid in ids}
 
 # Servisní funkce pro smazání úkolu (pro testování)
 def delete_task(task_id):
-    conn = sqlite3.connect(DB_FILE)
-    cur = conn.cursor()
-    cur.execute('DELETE FROM tasks WHERE id = ?', (task_id,))
-    conn.commit()
-    conn.close()
+    supabase.table('tasks').delete().eq('id', task_id).execute()
     return True
 # ============================
 # USER MANAGEMENT FUNKCE
@@ -600,11 +526,7 @@ if st.session_state.get('authentication_status'):
                                     st.success("Úkol přidán i přes kolizi.")
                                     st.rerun()
                                 if col_n.button("Zrušit"):
-                                    conn = sqlite3.connect(DB_FILE)
-                                    cur = conn.cursor()
-                                    cur.execute('DELETE FROM tasks WHERE id = ?', (task_id,))
-                                    conn.commit()
-                                    conn.close()
+                                    delete_task(task_id)
                                     st.info("Přidání zrušeno.")
                             else:
                                 st.success("Úkol úspěšně přidán!")
@@ -841,18 +763,25 @@ if st.session_state.get('authentication_status'):
         num_days = last_day.day
 
         # Načti úkoly
-        conn = sqlite3.connect(DB_FILE)
-        cur = conn.cursor()
-        cur.execute('SELECT * FROM tasks WHERE start_date IS NOT NULL AND end_date IS NOT NULL')
-        all_tasks = cur.fetchall()
-        conn.close()
+        response = supabase.table('tasks').select('*').neq('start_date', None).neq('end_date', None).execute()
+        all_tasks = response.data
 
         plot_data = []
         pdf_data = []  # Pro reportlab export
         workplaces_set = set()
 
         for t in all_tasks:
-            tid, pid, order, wp_id, hours, mode, start_int, end_int, status, notes, reason = t
+            tid = t['id']
+            pid = t['project_id']
+            order = t['order_number']
+            wp_id = t['workplace_id']
+            hours = t['hours']
+            mode = t['capacity_mode']
+            start_int = t['start_date']
+            end_int = t['end_date']
+            status = t['status']
+            notes = t['notes']
+            reason = t['reason']
             if status == 'canceled':
                 continue
 
@@ -1024,14 +953,17 @@ if st.session_state.get('authentication_status'):
 
         occupancy = {wp_name: [0.0 for _ in range(12)] for _, wp_name in workplaces}
 
-        conn = sqlite3.connect(DB_FILE)
-        cur = conn.cursor()
-        cur.execute('SELECT id, workplace_id, hours, capacity_mode, start_date, end_date, status FROM tasks WHERE start_date IS NOT NULL AND end_date IS NOT NULL')
-        tasks = cur.fetchall()
-        conn.close()
+        response = supabase.table('tasks').select('id, workplace_id, hours, capacity_mode, start_date, end_date, status').neq('start_date', None).neq('end_date', None).execute()
+        tasks = response.data
 
         for t in tasks:
-            tid, wp_id, total_hours, mode, start_str, end_str, status = t
+            tid = t['id']
+            wp_id = t['workplace_id']
+            total_hours = t['hours']
+            mode = t['capacity_mode']
+            start_str = t['start_date']
+            end_str = t['end_date']
+            status = t['status']
             if status == 'canceled':
                 continue
             wp_name = get_workplace_name(wp_id)
@@ -1146,4 +1078,3 @@ if st.session_state.get('authentication_status'):
     st.sidebar.markdown("---")
     st.sidebar.markdown("Plánovač Horkých komor v1.0")
     st.sidebar.caption("petr.svrcula@cvrez.cz")
-    
