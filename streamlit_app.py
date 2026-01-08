@@ -400,11 +400,11 @@ if st.session_state.get('authentication_status'):
 
     # Menu závisí na roli
     options = [
-        "Správa pracovišť",
         "Přidat projekt / úkol",
         "Prohlížet / Upravovat úkoly",
         "HMG měsíční",
         "HMG roční",
+        "Správa pracovišť",
         "Změnit heslo"
     ]
     if role == 'admin':
@@ -413,29 +413,17 @@ if st.session_state.get('authentication_status'):
     option = st.sidebar.radio("Navigace", options)
 
     # ============================
-    # 1. PŘIDAT / SPRÁVA PRACOVIŠŤ
+    # 1. PŘIDAT PROJEKT / ÚKOL (admin + normal)
     # ============================
-    if option == "Správa pracovišť":
-        st.header("Správa pracovišť")
+    if option == "Přidat projekt / úkol":
+        st.header("Přidat projekt a úkol")
 
-        if role != 'admin':
-            st.error("Přístup jen pro administrátory.")
+        if role == 'viewer':
+            st.error("Přístup jen pro administrátory a normální uživatele.")
         else:
             col1, col2 = st.columns(2)
 
             with col1:
-                st.subheader("Přidat pracoviště")
-                new_wp_name = st.text_input("Název nového pracoviště")
-                if st.button("Přidat pracoviště"):
-                    if new_wp_name.strip():
-                        if add_workplace(new_wp_name.strip()):
-                            st.success(f"Pracoviště '{new_wp_name}' přidáno!")
-                            st.rerun()
-                        else:
-                            st.error("Pracoviště již existuje.")
-                    else:
-                        st.error("Zadejte název.")
-
                 st.subheader("Přidat projekt")
                 proj_id = st.text_input("Číslo projektu (povinné)")
                 proj_name = st.text_input("Název projektu (volitelné)")
@@ -450,20 +438,71 @@ if st.session_state.get('authentication_status'):
                         st.error("Zadejte číslo projektu.")
 
             with col2:
-                st.subheader("Existující pracoviště")
-                workplaces = get_workplaces()
-                if workplaces:
-                    for wp_id, wp_name in workplaces:
-                        c1, c2 = st.columns([4,1])
-                        c1.write(wp_name)
-                        if c2.button("Smazat", key=f"del_{wp_id}"):
-                            if delete_workplace(wp_id):
-                                st.success(f"Pracoviště {wp_name} smazáno.")
-                                st.rerun()
-                            else:
-                                st.error("Pracoviště je použito v úkolech.")
-                else:
-                    st.info("Žádné pracoviště.")
+                st.subheader("Přidat úkol")
+                with st.form(key="add_task_form"):
+                    col1, col2 = st.columns(2)
+
+                    with col1:
+                        project_choices = get_project_choices()
+                        if not project_choices:
+                            st.warning("Nejprve přidejte projekt.")
+                            project_id = None
+                        else:
+                            project_id = st.selectbox("Projekt", project_choices, key="add_proj")
+
+                        order_number = st.number_input("Pořadí úkolu", min_value=1, step=1)
+
+                        wp_names = [name for _, name in get_workplaces()]
+                        wp_name = st.selectbox("Pracoviště", wp_names)
+                        wp_id = next((wid for wid, name in get_workplaces() if name == wp_name), None)
+
+                        hours = st.number_input("Počet hodin", min_value=0.5, step=0.5, format="%.1f")
+
+                    with col2:
+                        capacity_mode = st.radio("Režim kapacity", ['7.5', '24'], horizontal=True)
+
+                        start_date_obj = st.date_input("Začátek (volitelné)", value=None, format="DD.MM.YYYY")
+                        start_ddmmyyyy = start_date_obj.strftime('%d.%m.%Y') if start_date_obj else None
+
+                        notes = st.text_area("Poznámka")
+
+                    submitted = st.form_submit_button("Přidat úkol")
+                    if submitted:
+                        if not project_id:
+                            st.error("Vyberte projekt.")
+                        elif not wp_id:
+                            st.error("Vyberte pracoviště.")
+                        elif hours <= 0:
+                            st.error("Zadejte platný počet hodin.")
+                        elif not is_order_unique(project_id, int(order_number)):
+                            st.error(f"Pořadí {order_number} v projektu {project_id} již existuje – zadejte unikátní pořadí.")
+                        else:
+                            try:
+                                task_id = add_task(
+                                    project_id=project_id,
+                                    order_number=int(order_number),
+                                    workplace_id=wp_id,
+                                    hours=float(hours),
+                                    mode=capacity_mode,
+                                    start_ddmmyyyy=start_ddmmyyyy,
+                                    notes=notes
+                                )
+
+                                if check_collisions(task_id):
+                                    colliding = get_colliding_projects(task_id)
+                                    st.warning(f"⚠️ Kolize s projekty: {', '.join(colliding)}")
+                                    col_y, col_n = st.columns(2)
+                                    if col_y.button("Přesto přidat"):
+                                        st.success("Úkol přidán i přes kolizi.")
+                                        st.rerun()
+                                    if col_n.button("Zrušit"):
+                                        delete_task(task_id)
+                                        st.info("Přidání zrušeno.")
+                                else:
+                                    st.success("Úkol úspěšně přidán!")
+                                    st.rerun()
+                            except Exception as e:
+                                st.error(f"Chyba: {e}")
 
     # ============================
     # 2. PŘIDAT PROJEKT / ÚKOL (admin + normal)
@@ -560,7 +599,7 @@ if st.session_state.get('authentication_status'):
                                 st.error(f"Chyba: {e}")
 
     # ============================
-    # 3. PROHLÍŽET / UPRAVOVAT ÚKOLY
+    # 2. PROHLÍŽET / UPRAVOVAT ÚKOLY
     # ============================
     elif option == "ProhlíŽet / Upravovat úkoly":
         st.header("Prohlížet / Upravovat úkoly")
@@ -705,7 +744,47 @@ if st.session_state.get('authentication_status'):
                             st.info("Žádné úkoly k mazání.")
 
     # ============================
-    # ZMĚNIT HESLO
+    # 5. SPRÁVA PRACOVIŠŤ (jen admin)
+    # ============================
+    elif option == "Správa pracovišť":
+        if role != 'admin':
+            st.error("Přístup jen pro administrátory.")
+        else:
+            st.header("Správa pracovišť")
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.subheader("Přidat pracoviště")
+                new_wp_name = st.text_input("Název nového pracoviště")
+                if st.button("Přidat pracoviště"):
+                    if new_wp_name.strip():
+                        if add_workplace(new_wp_name.strip()):
+                            st.success(f"Pracoviště '{new_wp_name}' přidáno!")
+                            st.rerun()
+                        else:
+                            st.error("Pracoviště již existuje.")
+                    else:
+                        st.error("Zadejte název.")
+
+            with col2:
+                st.subheader("Existující pracoviště")
+                workplaces = get_workplaces()
+                if workplaces:
+                    for wp_id, wp_name in workplaces:
+                        c1, c2 = st.columns([4,1])
+                        c1.write(wp_name)
+                        if c2.button("Smazat", key=f"del_{wp_id}"):
+                            if delete_workplace(wp_id):
+                                st.success(f"Pracoviště {wp_name} smazáno.")
+                                st.rerun()
+                            else:
+                                st.error("Pracoviště je použito v úkolech.")
+                else:
+                    st.info("Žádné pracoviště.")
+
+    # ============================
+    # 6. ZMĚNIT HESLO
     # ============================
     elif option == "Změnit heslo":
         st.header("Změnit heslo")
@@ -724,7 +803,7 @@ if st.session_state.get('authentication_status'):
                 st.error("Hesla se neshodují nebo jsou prázdná.")
 
     # ============================
-    # USER MANAGEMENT (jen pro admin)
+    # 7. USER MANAGEMENT (jen pro admin)
     # ============================
     elif option == "User Management" and role == 'admin':
         st.header("User Management – Pouze pro admin")
