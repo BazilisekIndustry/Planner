@@ -12,4 +12,8 @@ credentials:
       name: Alica Fedoriková
       password: '1234'
       role: normal
+    honza:
+      name: Jan Šíma
+      password: '1234'
+      role: normal
 preauthorized: []
