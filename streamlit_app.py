@@ -13,6 +13,7 @@ from st_aggrid import AgGrid, GridUpdateMode, DataReturnMode
 # ============================
 # KONFIGURACE
 # ============================
+USERS_FILE = 'users.yaml'
 SUPABASE_URL = st.secrets["supabase_url"]
 SUPABASE_KEY = st.secrets["supabase_key"]
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
