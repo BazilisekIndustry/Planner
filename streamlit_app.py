@@ -102,7 +102,10 @@ def ddmmyyyy_to_yyyymmdd(date_str):
 def yyyymmdd_to_ddmmyyyy(date_str):
     if not date_str:
         return ""
-    return datetime.strptime(date_str, '%Y-%m-%d').strftime('%d.%m.%Y')
+    try:
+        return datetime.strptime(date_str, '%Y-%m-%d').strftime('%d.%m.%Y')
+    except:
+        return ""              # pro jistotu, kdyby bylo něco špatně
 
 def validate_ddmmyyyy(date_str):
     """Rozšířená validace: přijímá 1.1.2026 i 01.01.2026 i 1-1-2026 atd."""
@@ -661,8 +664,8 @@ if st.session_state.get('authentication_status'):
             data = []
             for t in tasks:
                 wp_name = get_workplace_name(t['workplace_id'])
-                start_disp = yyyymmdd_to_ddmmyyyy(t['start_date']) if t['start_date'] else "bez data"
-                end_disp = yyyymmdd_to_ddmmyyyy(t['end_date']) if t['end_date'] else ""
+                start_disp = yyyymmdd_to_ddmmyyyy(t['start_date'])   # teď bude "" místo "bez data"
+                end_disp = yyyymmdd_to_ddmmyyyy(t['end_date'])
                 coll_text = ""
                 if collisions.get(t['id'], False):
                     colliding = get_colliding_projects(t['id'])
@@ -747,26 +750,46 @@ if st.session_state.get('authentication_status'):
             # Zbytek kódu (změna stavu, mazání) zůstává stejný jako v předchozí verzi
             updated_df = grid_response['data']
             changes_made = False
+
             for _, row in updated_df.iterrows():
                 task_id = row['ID']
                 new_start_raw = row['Začátek']
                 new_start_str = str(new_start_raw).strip() if pd.notna(new_start_raw) else ""
+                
                 task = get_task(task_id)
                 original_start = yyyymmdd_to_ddmmyyyy(task['start_date']) if task['start_date'] else ""
-                if new_start_str != original_start:
-                    if new_start_str and not validate_ddmmyyyy(new_start_str):
-                        st.error(f"Neplatné datum u úkolu: '{new_start_str}'. Použijte DD.MM.YYYY.")
-                    else:
-                        try:
-                            update_task(task_id, 'start_date', new_start_str)
-                            recalculate_from_task(task_id)
-                            changes_made = True
-                        except Exception as e:
-                            st.error(f"Chyba při úpravě úkolu: {e}")
+                
+                # Pokud se nic nezměnilo → přeskočíme
+                if new_start_str == original_start:
+                    continue
+                
+                # 1. Uživatel vymazal pole (prázdné) → chceme nastavit start_date na None
+                if not new_start_str:
+                    try:
+                        update_task(task_id, 'start_date', None)
+                        recalculate_from_task(task_id)
+                        changes_made = True
+                    except Exception as e:
+                        st.error(f"Chyba při vymazání data u úkolu {task_id}: {e}")
+                    continue
+                
+                # 2. Uživatel něco napsal → musíme ověřit formát
+                if not validate_ddmmyyyy(new_start_str):
+                    st.error(f"Neplatné datum u úkolu {task_id}: '{new_start_str}'. Použijte např. 1.1.2026 nebo 15.03.2025")
+                    continue
+                
+                # 3. Platný formát → uložíme
+                try:
+                    update_task(task_id, 'start_date', new_start_str)
+                    recalculate_from_task(task_id)
+                    changes_made = True
+                except Exception as e:
+                    st.error(f"Chyba při úpravě data u úkolu {task_id}: {e}")
 
             if changes_made:
                 st.success("Změny uloženy a termíny přepočítány.")
-                recalculate_project(selected_project)   # ← zajistí konzistenci celého projektu
+                # Volitelně: přepočítat celý projekt pro jistotu
+                # recalculate_project(selected_project)
                 st.rerun()
 
             if tasks:
