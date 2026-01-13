@@ -681,7 +681,7 @@ if st.session_state.get('authentication_status'):
 
                 # Detailní popis pro tabulku
                 task_desc = (
-                    f"P{selected_project} – {wp_name} – {start_disp} – {t['hours']}h – "
+                    f"{wp_name} – {start_disp} – {t['hours']}h – "
                     f"{status_icon}{status_display} – {t['notes'][:40] or 'bez poznámky'}..."
                 )
 
@@ -762,7 +762,7 @@ if st.session_state.get('authentication_status'):
                     wp_name = get_workplace_name(t['workplace_id'])
                     start = yyyymmdd_to_ddmmyyyy(t['start_date']) or 'bez data'
                     status_icon = "✅ " if t['status'] == 'done' else "❌ " if t['status'] == 'canceled' else ""
-                    desc = f"P{selected_project} – {wp_name} – {start} – {t['hours']}h – {status_icon}{t['status']} – {t['notes'][:40] or 'bez poznámky'}..."
+                    desc = f"{wp_name} – {start} – {t['hours']}h – {status_icon}{t['status']} – {t['notes'][:40] or 'bez poznámky'}..."
                     task_options.append(desc)
 
                 selected_task_display = st.selectbox("Vyberte úkol", task_options, key="status_change_order")
