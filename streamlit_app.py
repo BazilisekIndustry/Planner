@@ -435,6 +435,7 @@ if st.session_state.get('authentication_status'):
                     if proj_id.strip():
                         if add_project(proj_id.strip(), proj_name.strip()):
                             st.success(f"Projekt {proj_id} přidán!")
+                            st.confetti()
                             st.rerun()
                         else:
                             st.error("Projekt již existuje nebo chyba při vkládání.")
@@ -558,7 +559,7 @@ if st.session_state.get('task_added_success', False):
         f"Režim: {details['mode']}\n"
         f"Začátek: {details['start']}"
     )
-    st.balloons()  # Balónky pro radost!
+    #st.balloons()  # Balónky pro radost!
 
     # Volitelně toast
     st.toast("Nový úkol je připraven!", icon="🎉")
