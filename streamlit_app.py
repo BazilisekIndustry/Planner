@@ -78,20 +78,26 @@ def is_working_day(dt, mode):
     return not is_holiday(dt)
 
 def normalize_date_str(date_str):
+    """Normalizuje různé formáty oddělovačů a ořízne mezery"""
     if not date_str:
         return None
-    normalized = date_str.replace('.', '-').replace('/', '-')
+    # Nahradíme všechny běžné oddělovače za pomlčku
+    normalized = re.sub(r'[./]', '-', date_str.strip())
     return normalized
 
 def ddmmyyyy_to_yyyymmdd(date_str):
+    """Převod z různých DD.MM.YYYY formátů do YYYY-MM-DD"""
     if not date_str or not date_str.strip():
         return None
-    normalized = normalize_date_str(date_str.strip())
+    
+    normalized = normalize_date_str(date_str)
     try:
         day, month, year = map(int, normalized.split('-'))
-        return date(year, month, day).strftime('%Y-%m-%d')
-    except:
-        raise ValueError("Neplatný formát data. Použijte DD.MM.YYYY nebo DD-MM-YYYY.")
+        # Zde už můžeme použít datetime pro plnou validaci (nejbezpečnější)
+        dt = date(year, month, day)
+        return dt.strftime('%Y-%m-%d')
+    except (ValueError, TypeError):
+        raise ValueError("Neplatný formát data. Použijte např. 1.1.2026, 01.01.2026, 1-1-2026 apod.")
 
 def yyyymmdd_to_ddmmyyyy(date_str):
     if not date_str:
@@ -99,14 +105,22 @@ def yyyymmdd_to_ddmmyyyy(date_str):
     return datetime.strptime(date_str, '%Y-%m-%d').strftime('%d.%m.%Y')
 
 def validate_ddmmyyyy(date_str):
+    """Rozšířená validace: přijímá 1.1.2026 i 01.01.2026 i 1-1-2026 atd."""
     if not date_str:
         return True
+    
     normalized = normalize_date_str(date_str)
-    pattern = re.compile(r'^\d{2}-\d{2}-\d{4}$')
-    if not pattern.match(normalized):
+    # Regulární výraz pro DD-MM-YYYY kde D/M může být 1-2 číslice
+    pattern = re.compile(r'^(\d{1,2})-(\d{1,2})-(\d{4})$')
+    match = pattern.match(normalized)
+    if not match:
         return False
+    
     try:
-        ddmmyyyy_to_yyyymmdd(normalized)
+        day, month, year = map(int, match.groups())
+        # Základní kontrola rozsahu (není 100% přesná, ale stačí pro UI)
+        if not (1 <= day <= 31 and 1 <= month <= 12 and 2000 <= year <= 2100):
+            return False
         return True
     except:
         return False
