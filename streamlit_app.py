@@ -479,12 +479,6 @@ if st.session_state.get('authentication_status'):
                         wp_name = st.selectbox("Pracoviště", wp_names)
                         wp_id = next((wid for wid, name in get_workplaces() if name == wp_name), None)
                         hours = st.number_input("Počet hodin", min_value=0.5, step=0.5, format="%.1f")
-
-                    with colB:
-                        capacity_mode = st.radio("Režim kapacity", ['7.5', '24'], horizontal=True)
-                        start_date_obj = st.date_input("Začátek (volitelné)", value=None, format="DD.MM.YYYY")
-                        start_ddmmyyyy = start_date_obj.strftime('%d.%m.%Y') if start_date_obj else None
-                        notes = st.text_area("Poznámka")
                         bodies_count = st.number_input("Počet těles", min_value=1, step=1)
                         active_choice = st.radio(
                             "Stav těles",
@@ -493,6 +487,13 @@ if st.session_state.get('authentication_status'):
                             horizontal=True
                         )
                         is_active = (active_choice == "Aktivní")
+
+                    with colB:
+                        capacity_mode = st.radio("Režim kapacity", ['7.5', '24'], horizontal=True)
+                        start_date_obj = st.date_input("Začátek (volitelné)", value=None, format="DD.MM.YYYY")
+                        start_ddmmyyyy = start_date_obj.strftime('%d.%m.%Y') if start_date_obj else None
+                        notes = st.text_area("Poznámka")
+                        
                         if project_id:
                             possible_parents = get_tasks(project_id)
                             parent_options = ["Žádný (root)"] + [
