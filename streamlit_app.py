@@ -451,14 +451,14 @@ if st.session_state.get('project_added_success', False):
     proj_id = st.session_state['project_added_id']
     st.success(f"Projekt {proj_id} úspěšně přidán! 🎉")
     st.balloons()          # Balónky pro radost
-    st.toast("Nový projekt je připraven!", icon="🚀")
+    #st.toast("Nový projekt je připraven!", icon="🚀")
 
     # Vyčistíme session_state, aby se notifikace nezobrazovala stále
     del st.session_state['project_added_success']
     if 'project_added_id' in st.session_state:
         del st.session_state['project_added_id']
 
-        with col2:
+with col2:
                 st.subheader("Přidat úkol")
                 with st.form(key="add_task_form"):
                     colA, colB = st.columns(2)
