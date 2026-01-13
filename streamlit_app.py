@@ -447,7 +447,6 @@ if st.session_state.get('authentication_status'):
             if st.session_state.get('project_added_success', False):
                 proj_id = st.session_state['project_added_id']
                 st.success(f"Projekt {proj_id} úspěšně přidán! 🎉")
-                st.confetti()
                 st.balloons()
                 del st.session_state['project_added_success']
                 if 'project_added_id' in st.session_state:
