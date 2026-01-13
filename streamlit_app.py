@@ -608,8 +608,6 @@ if st.session_state.get('authentication_status'):
                         start_ddmmyyyy = start_date_obj.strftime('%d.%m.%Y') if start_date_obj else None
                         notes = st.text_area("Poznámka")
                         
-                        
-
                     submitted = st.form_submit_button("Přidat úkol")
                     if submitted:
                         if not project_id:
@@ -621,36 +619,126 @@ if st.session_state.get('authentication_status'):
                         elif parent_id and has_cycle(parent_id):
                             st.error("Vytvoření cyklu zakázáno.")
                         else:
-                            try:
-                                task_id = add_task(
-                                    project_id=project_id,
-                                    workplace_id=wp_id,
-                                    hours=float(hours),
-                                    mode=capacity_mode,
-                                    start_ddmmyyyy=start_ddmmyyyy,
-                                    notes=notes,
-                                    bodies_count=int(bodies_count),
-                                    is_active=is_active,
-                                    parent_id=parent_id
-                                )
-                                if task_id is None:
-                                    st.error("Kolize v rámci projektu na stejném pracovišti. Upravte existující úkol(y) a zkuste znovu.")
-                                else:
-                                    st.session_state['task_added_success'] = True
-                                    st.session_state['task_added_details'] = {
-                                        'project': project_id,
-                                        'workplace': wp_name,
-                                        'hours': hours,
-                                        'mode': capacity_mode,
-                                        'start': start_ddmmyyyy or 'automaticky'
-                                    }
-                                    if parent_id:
-                                        children_count = len(get_children(parent_id))
-                                        if children_count > 1:
-                                            st.session_state['fork_warning'] = children_count
-                                    st.rerun()
+                            try:    
+# Dočasně vytvoříme úkol jen v paměti pro kontrolu kolizí
+                                start_yyyymmdd = ddmmyyyy_to_yyyymmdd(start_ddmmyyyy) if start_ddmmyyyy else None
+                                temp_end = calculate_end_date(start_yyyymmdd, float(hours), capacity_mode) if start_yyyymmdd else None
+
+                                # Kontrola kolizí v rámci stejného projektu → tvrdé zastavení
+                                if start_yyyymmdd and temp_end:
+                                    existing_in_project = (
+                                        supabase.table('tasks')
+                                        .select('id, start_date, end_date')
+                                        .eq('project_id', project_id)
+                                        .eq('workplace_id', wp_id)
+                                        .not_.is_('start_date', 'null')
+                                        .not_.is_('end_date', 'null')
+                                        .neq('id', -1)   # dummy, aby query nebyla prázdná při chybě
+                                        .execute()
+                                        .data
+                                    )
+
+                                    conflict_in_project = False
+                                    for ex in existing_in_project:
+                                        ex_start = datetime.strptime(ex['start_date'], '%Y-%m-%d').date()
+                                        ex_end = datetime.strptime(ex['end_date'], '%Y-%m-%d').date()
+                                        new_start = datetime.strptime(start_yyyymmdd, '%Y-%m-%d').date()
+                                        new_end = datetime.strptime(temp_end, '%Y-%m-%d').date()
+                                        if not (new_end < ex_start or new_start > ex_end):
+                                            conflict_in_project = True
+                                            break
+
+                                    if conflict_in_project:
+                                        st.error("Kolize v rámci stejného projektu na tomto pracovišti. "
+                                                "Upravte existující úkol(y) a zkuste znovu.")
+                                        st.stop()  # zastavíme další zpracování
+        # Pokud projde intra-projekt kontrolou → jdeme na cross-projekt
+            # Dočasně si uložíme data do session_state pro případné potvrzení
+                                if start_yyyymmdd:
+                                    # Simulujeme kolizi (použijeme funkci, kterou už máš)
+                                    colliding_projects = get_colliding_projects_simulated(
+                                        workplace_id=wp_id,
+                                        start_date=start_yyyymmdd,
+                                        end_date=temp_end,
+                                        exclude_task_id=None  # nový úkol ještě nemá ID
+                                    )
+
+                                    if colliding_projects:
+                                        # Kolize mezi projekty → potvrzovací dialog
+                                        st.session_state['pending_task_data'] = {
+                                            'project_id': project_id,
+                                            'workplace_id': wp_id,
+                                            'hours': float(hours),
+                                            'mode': capacity_mode,
+                                            'start_ddmmyyyy': start_ddmmyyyy,
+                                            'notes': notes,
+                                            'bodies_count': int(bodies_count),
+                                            'is_active': is_active,
+                                            'parent_id': parent_id,
+                                            'colliding_projects': colliding_projects
+                                        }
+                                        st.session_state['show_collision_confirm'] = True
+                                        st.rerun()
+                                    else:
+                                        # Žádná kolize → přidáme normálně
+                                        task_id = add_task(
+                                            project_id=project_id,
+                                            workplace_id=wp_id,
+                                            hours=float(hours),
+                                            mode=capacity_mode,
+                                            start_ddmmyyyy=start_ddmmyyyy,
+                                            notes=notes,
+                                            bodies_count=int(bodies_count),
+                                            is_active=is_active,
+                                            parent_id=parent_id
+                                        )
+                                        st.session_state['task_added_success'] = True
+                                        # ... zbytek notifikací ...
+                                        st.rerun()
+
                             except Exception as e:
-                                st.error(f"Chyba při přidávání úkolu: {e}")
+                                st.error(f"Chyba při kontrole/přidávání úkolu: {e}")            
+                    # ----------------- Potvrzovací dialog (mimo form) -----------------
+                    if st.session_state.get('show_collision_confirm', False):
+                        pending = st.session_state['pending_task_data']
+                        colliding_str = ', '.join(map(str, pending['colliding_projects']))
+
+                        st.warning(f"**Pozor – kolize mezi projekty!**\n\n"
+                                f"Tento nový úkol bude kolidovat s projekty: **{colliding_str}** "
+                                f"na pracovišti {get_workplace_name(pending['workplace_id'])}.\n\n"
+                                "Opravdu chcete úkol přidat přesto?")
+
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            if st.button("Ano, přidat přesto", type="primary"):
+                                # Teď teprve přidáme úkol
+                                task_id = add_task(
+                                    project_id=pending['project_id'],
+                                    workplace_id=pending['workplace_id'],
+                                    hours=pending['hours'],
+                                    mode=pending['mode'],
+                                    start_ddmmyyyy=pending['start_ddmmyyyy'],
+                                    notes=pending['notes'],
+                                    bodies_count=pending['bodies_count'],
+                                    is_active=pending['is_active'],
+                                    parent_id=pending['parent_id']
+                                )
+                                if task_id:
+                                    st.success("Úkol přidán přesto (s kolizí).")
+                                    st.session_state['task_added_success'] = True
+                                    # ... notifikace ...
+                                # Vyčistíme stav
+                                del st.session_state['pending_task_data']
+                                del st.session_state['show_collision_confirm']
+                                st.rerun()
+
+                        with col2:
+                            if st.button("Ne, zrušit"):
+                                st.info("Přidání úkolu zrušeno.")
+                                del st.session_state['pending_task_data']
+                                del st.session_state['show_collision_confirm']
+                                st.rerun()                    
+                    
 
             # Notifikace pro úkol – mimo sloupce a form
             if st.session_state.get('task_added_success', False):
