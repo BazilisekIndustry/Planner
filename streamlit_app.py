@@ -502,8 +502,6 @@ if st.session_state.get('authentication_status'):
                         notes = st.text_area("Poznámka")
                         
 
-                        
-
                     submitted = st.form_submit_button("Přidat úkol")
                     if submitted:
                         if not project_id:
@@ -528,13 +526,12 @@ if st.session_state.get('authentication_status'):
                                     parent_id=parent_id
                                 )
 
-                                # Kontrola fork/split po přidání
+                                # Kontrola fork/split
                                 if parent_id:
                                     children_count = len(get_children(parent_id))
                                     if children_count > 1:
                                         st.warning(
-                                            f"Vytvořili jste fork/split – úkol {parent_id} má nyní {children_count} potomků. "
-                                            "Potvrďte, pokud je to záměr."
+                                            f"Vytvořili jste fork/split – nadřazený úkol má nyní {children_count} potomků."
                                         )
 
                                 if check_collisions(task_id):
@@ -548,8 +545,12 @@ if st.session_state.get('authentication_status'):
                                         delete_task(task_id)
                                         st.info("Přidání zrušeno.")
                                 else:
-                                    st.success("Úkol úspěšně přidán!")
-                                    st.rerun()
+                                    # ÚSPĚŠNÁ NOTIFIKACE – ZDE JI ZOBRAZÍME MIMO FORM, ALE STÁLE V col2
+                                    st.success("Úkol úspěšně přidán! ✅")
+                                    # Volitelně přidej i detaily nebo balónky
+                                    st.balloons()
+                                    st.rerun()  # refresh stránky po úspěchu
+
                             except Exception as e:
                                 st.error(f"Chyba při přidávání úkolu: {e}")
 
