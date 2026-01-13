@@ -435,7 +435,7 @@ if st.session_state.get('authentication_status'):
                     if proj_id.strip():
                         if add_project(proj_id.strip(), proj_name.strip()):
                             st.success(f"Projekt {proj_id} přidán!")
-                            st.confetti()
+                            st.balloons()
                             st.rerun()
                         else:
                             st.error("Projekt již existuje nebo chyba při vkládání.")
