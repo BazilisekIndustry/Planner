@@ -436,47 +436,68 @@ if st.session_state.get('authentication_status'):
             col1, col2 = st.columns(2)
             with col1:
                 st.subheader("Přidat projekt")
-                proj_id = st.text_input("Číslo projektu (povinné)")
-                proj_name = st.text_input("Název projektu (volitelné)")
+                proj_id = st.text_input("Číslo projektu (povinné)", key="new_proj_id")
+                proj_name = st.text_input("Název projektu (volitelné)", key="new_proj_name")
                 if st.button("Přidat projekt"):
                     if proj_id.strip():
                         if add_project(proj_id.strip(), proj_name.strip()):
                             st.success(f"Projekt {proj_id} přidán!")
                             st.rerun()
                         else:
-                            st.error("Projekt již existuje.")
+                            st.error("Projekt již existuje nebo chyba při vkládání.")
                     else:
                         st.error("Zadejte číslo projektu.")
+
             with col2:
                 st.subheader("Přidat úkol")
                 with st.form(key="add_task_form"):
-                    col1, col2 = st.columns(2)
-                    with col1:
+                    colA, colB = st.columns(2)
+                    with colA:
                         project_choices = get_project_choices()
                         if not project_choices:
                             st.warning("Nejprve přidejte projekt.")
                             project_id = None
                         else:
-                            project_id = st.selectbox("Projekt", project_choices, key="add_proj")
+                            project_id = st.selectbox("Projekt", project_choices, key="add_task_proj")
                         order_number = st.number_input("Pořadí úkolu", min_value=1, step=1)
                         wp_names = [name for _, name in get_workplaces()]
                         wp_name = st.selectbox("Pracoviště", wp_names)
                         wp_id = next((wid for wid, name in get_workplaces() if name == wp_name), None)
                         hours = st.number_input("Počet hodin", min_value=0.5, step=0.5, format="%.1f")
-                    with col2:
+
+                    with colB:
                         capacity_mode = st.radio("Režim kapacity", ['7.5', '24'], horizontal=True)
                         start_date_obj = st.date_input("Začátek (volitelné)", value=None, format="DD.MM.YYYY")
                         start_ddmmyyyy = start_date_obj.strftime('%d.%m.%Y') if start_date_obj else None
                         notes = st.text_area("Poznámka")
                         bodies_count = st.number_input("Počet těles", min_value=1, step=1)
-                        is_active = st.checkbox("Aktivní tělesa", value=True)
-                        possible_parents = get_tasks(project_id) if project_id else []
-                        parent_options = ["Žádný (root)"] + [f"P{project_id}-{t['order_number']}" for t in possible_parents]
-                        parent_choice = st.selectbox("Parent úkol (větev)", parent_options)
-                        parent_id = None
-                        if parent_choice != "Žádný (root)":
-                            idx = parent_options.index(parent_choice) - 1
-                            parent_id = possible_parents[idx]['id']
+
+                        # Radio button pro aktivní/neaktivní tělesa – defaultně Aktivní
+                        active_choice = st.radio(
+                            "Stav těles",
+                            ["Aktivní", "Neaktivní"],
+                            index=0,  # 0 = Aktivní jako default
+                            horizontal=True
+                        )
+                        is_active = (active_choice == "Aktivní")
+
+                        # Výběr parenta (single parent – jen jeden)
+                        if project_id:
+                            possible_parents = get_tasks(project_id)
+                            parent_options = ["Žádný (root)"] + [
+                                f"P{project_id}-{t['order_number']} ({yyyymmdd_to_ddmmyyyy(t['start_date']) or 'bez data'})" 
+                                for t in possible_parents
+                            ]
+                            parent_choice = st.selectbox("Nadřazený úkol (větev)", parent_options)
+                            parent_id = None
+                            if parent_choice != "Žádný (root)":
+                                idx = parent_options.index(parent_choice) - 1
+                                if 0 <= idx < len(possible_parents):
+                                    parent_id = possible_parents[idx]['id']
+                        else:
+                            parent_id = None
+                            st.info("Vyberte projekt pro zobrazení možných nadřazených úkolů.")
+
                     submitted = st.form_submit_button("Přidat úkol")
                     if submitted:
                         if not project_id:
@@ -488,7 +509,7 @@ if st.session_state.get('authentication_status'):
                         elif not is_order_unique(project_id, int(order_number)):
                             st.error(f"Pořadí {order_number} v projektu {project_id} již existuje.")
                         elif parent_id and has_cycle(parent_id):
-                            st.error("Vytvoření cyklu zakázáno.")
+                            st.error("Vytvoření cyklu zakázáno – nelze vybrat úkol, který by vedl k cyklu.")
                         else:
                             try:
                                 task_id = add_task(
@@ -503,6 +524,16 @@ if st.session_state.get('authentication_status'):
                                     is_active=is_active,
                                     parent_id=parent_id
                                 )
+
+                                # Kontrola fork/split po přidání
+                                if parent_id:
+                                    children_count = len(get_children(parent_id))
+                                    if children_count > 1:
+                                        st.warning(
+                                            f"Vytvořili jste fork/split – úkol {parent_id} má nyní {children_count} potomků. "
+                                            "Potvrďte, pokud je to záměr."
+                                        )
+
                                 if check_collisions(task_id):
                                     colliding = get_colliding_projects(task_id)
                                     st.warning(f"⚠️ Kolize s projekty: {', '.join(colliding)}")
@@ -517,7 +548,7 @@ if st.session_state.get('authentication_status'):
                                     st.success("Úkol úspěšně přidán!")
                                     st.rerun()
                             except Exception as e:
-                                st.error(f"Chyba: {e}")
+                                st.error(f"Chyba při přidávání úkolu: {e}")
 
     elif option == "Prohlížet / Upravovat úkoly":
         st.header("Prohlížet / Upravovat úkoly")
