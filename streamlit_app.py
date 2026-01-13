@@ -301,6 +301,36 @@ def has_cycle(task_id):
         visited.add(current)
         current = get_parent(current)
     return False
+def get_colliding_projects_simulated(workplace_id, start_date, end_date, exclude_task_id=None):
+    """Simulovaná kontrola kolizí pro ještě nepřidaný úkol"""
+    if not start_date or not end_date:
+        return []
+    
+    start = datetime.strptime(start_date, '%Y-%m-%d').date()
+    end = datetime.strptime(end_date, '%Y-%m-%d').date()
+    
+    query = supabase.table('tasks').select('project_id') \
+        .eq('workplace_id', workplace_id) \
+        .not_.is_('start_date', 'null') \
+        .not_.is_('end_date', 'null')
+    
+    if exclude_task_id:
+        query = query.neq('id', exclude_task_id)
+    
+    response = query.execute()
+    
+    colliding = []
+    for row in response.data:
+        row_task = get_task(row['project_id'])  # lepší přímo načíst data
+        if not row_task or not row_task['start_date'] or not row_task['end_date']:
+            continue
+        row_start = datetime.strptime(row_task['start_date'], '%Y-%m-%d').date()
+        row_end = datetime.strptime(row_task['end_date'], '%Y-%m-%d').date()
+        if not (end < row_start or start > row_end):
+            colliding.append(row_task['project_id'])
+    
+    return list(set(colliding))
+
 
 def recalculate_from_task(task_id):
     """
