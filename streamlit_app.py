@@ -175,7 +175,7 @@ def get_tasks(project_id):
     return response.data
 
 
-def add_task(project_id, order_number, workplace_id, hours, mode, start_ddmmyyyy=None, notes='', bodies_count=1, is_active=True, parent_id=None):
+def add_task(project_id, workplace_id, hours, mode, start_ddmmyyyy=None, notes='', bodies_count=1, is_active=True, parent_id=None):
     start_yyyymmdd = ddmmyyyy_to_yyyymmdd(start_ddmmyyyy) if start_ddmmyyyy else None
     data = {
         'project_id': project_id,
@@ -825,7 +825,7 @@ if st.session_state.get('authentication_status'):
         for t in all_tasks:
             tid = t['id']
             pid = t['project_id']
-            order = t['order_number']
+            
             wp_id = t['workplace_id']
             hours = t['hours']
             mode = t['capacity_mode']
