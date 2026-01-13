@@ -171,21 +171,14 @@ def add_project(project_id, name):
         return False
 
 def get_tasks(project_id):
-    response = supabase.table('tasks').select('*').eq('project_id', project_id).order('order_number').execute()
+    response = supabase.table('tasks').select('*').eq('project_id', project_id).execute()
     return response.data
 
-def is_order_unique(project_id, order_number, task_id=None):
-    if task_id:
-        response = supabase.table('tasks').select('id').eq('project_id', project_id).eq('order_number', order_number).neq('id', task_id).execute()
-    else:
-        response = supabase.table('tasks').select('id').eq('project_id', project_id).eq('order_number', order_number).execute()
-    return len(response.data) == 0
 
 def add_task(project_id, order_number, workplace_id, hours, mode, start_ddmmyyyy=None, notes='', bodies_count=1, is_active=True, parent_id=None):
     start_yyyymmdd = ddmmyyyy_to_yyyymmdd(start_ddmmyyyy) if start_ddmmyyyy else None
     data = {
         'project_id': project_id,
-        'order_number': order_number,
         'workplace_id': workplace_id,
         'hours': hours,
         'capacity_mode': mode,
@@ -459,7 +452,6 @@ if st.session_state.get('authentication_status'):
                             project_id = None
                         else:
                             project_id = st.selectbox("Projekt", project_choices, key="add_task_proj")
-                        order_number = st.number_input("Pořadí úkolu", min_value=1, step=1)
                         wp_names = [name for _, name in get_workplaces()]
                         wp_name = st.selectbox("Pracoviště", wp_names)
                         wp_id = next((wid for wid, name in get_workplaces() if name == wp_name), None)
@@ -485,7 +477,7 @@ if st.session_state.get('authentication_status'):
                         if project_id:
                             possible_parents = get_tasks(project_id)
                             parent_options = ["Žádný (root)"] + [
-                                f"P{project_id}-{t['order_number']} ({yyyymmdd_to_ddmmyyyy(t['start_date']) or 'bez data'})" 
+                                f"P{project_id}-{yyyymmdd_to_ddmmyyyy(t['start_date']) or 'bez data'} - {t['notes'][:30]}..." 
                                 for t in possible_parents
                             ]
                             parent_choice = st.selectbox("Nadřazený úkol (větev)", parent_options)
@@ -506,15 +498,12 @@ if st.session_state.get('authentication_status'):
                             st.error("Vyberte pracoviště.")
                         elif hours <= 0:
                             st.error("Zadejte platný počet hodin.")
-                        elif not is_order_unique(project_id, int(order_number)):
-                            st.error(f"Pořadí {order_number} v projektu {project_id} již existuje.")
                         elif parent_id and has_cycle(parent_id):
                             st.error("Vytvoření cyklu zakázáno – nelze vybrat úkol, který by vedl k cyklu.")
                         else:
                             try:
                                 task_id = add_task(
                                     project_id=project_id,
-                                    order_number=int(order_number),
                                     workplace_id=wp_id,
                                     hours=float(hours),
                                     mode=capacity_mode,
@@ -584,7 +573,6 @@ if st.session_state.get('authentication_status'):
                 status_display = f"❌ Zrušeno ({t.get('reason') or '-'})"
             data.append({
                 "ID": t['id'],
-                "Pořadí": t['order_number'],
                 "Pracoviště": wp_name,
                 "Hodiny": t['hours'],
                 "Režim": t['capacity_mode'],
@@ -603,7 +591,6 @@ if st.session_state.get('authentication_status'):
             editable=True,
             gridOptions={
                 "columnDefs": [
-                    {"field": "Pořadí", "width": 90},
                     {"field": "Pracoviště", "width": 220},
                     {"field": "Hodiny", "width": 100},
                     {"field": "Režim", "width": 100},
