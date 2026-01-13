@@ -511,7 +511,7 @@ if st.session_state.get('authentication_status'):
                         elif hours <= 0:
                             st.error("Zadejte platný počet hodin.")
                         elif parent_id and has_cycle(parent_id):
-                            st.error("Vytvoření cyklu zakázáno – nelze vybrat úkol, který by vedl k cyklu.")
+                            st.error("Vytvoření cyklu zakázáno.")
                         else:
                             try:
                                 task_id = add_task(
@@ -526,33 +526,66 @@ if st.session_state.get('authentication_status'):
                                     parent_id=parent_id
                                 )
 
+                                # Uložíme úspěch do session_state (přetrvá rerun)
+                                st.session_state['task_added_success'] = True
+                                st.session_state['task_added_details'] = {
+                                    'project': project_id,
+                                    'workplace': wp_name,
+                                    'hours': hours,
+                                    'mode': capacity_mode,
+                                    'start': start_ddmmyyyy or 'automaticky'
+                                }
+
                                 # Kontrola fork/split
                                 if parent_id:
                                     children_count = len(get_children(parent_id))
                                     if children_count > 1:
-                                        st.warning(
-                                            f"Vytvořili jste fork/split – nadřazený úkol má nyní {children_count} potomků."
-                                        )
+                                        st.session_state['fork_warning'] = children_count
 
-                                if check_collisions(task_id):
-                                    colliding = get_colliding_projects(task_id)
-                                    st.warning(f"⚠️ Kolize s projekty: {', '.join(colliding)}")
-                                    col_y, col_n = st.columns(2)
-                                    if col_y.button("Přesto přidat"):
-                                        st.success("Úkol přidán i přes kolizi.")
-                                        st.rerun()
-                                    if col_n.button("Zrušit"):
-                                        delete_task(task_id)
-                                        st.info("Přidání zrušeno.")
-                                else:
-                                    # ÚSPĚŠNÁ NOTIFIKACE – ZDE JI ZOBRAZÍME MIMO FORM, ALE STÁLE V col2
-                                    st.success("Úkol úspěšně přidán! ✅")
-                                    # Volitelně přidej i detaily nebo balónky
-                                    st.balloons()
-                                    st.rerun()  # refresh stránky po úspěchu
+                                st.rerun()  # Rerun ihned po úspěchu
 
                             except Exception as e:
                                 st.error(f"Chyba při přidávání úkolu: {e}")
+
+# Zobrazení notifikace MIMO form (po rerun)
+if st.session_state.get('task_added_success', False):
+    details = st.session_state['task_added_details']
+    st.success(
+        f"Úkol úspěšně přidán! ✅\n\n"
+        f"Projekt: {details['project']}\n"
+        f"Pracoviště: {details['workplace']}\n"
+        f"Hodiny: {details['hours']}\n"
+        f"Režim: {details['mode']}\n"
+        f"Začátek: {details['start']}"
+    )
+    st.balloons()  # Balónky pro radost!
+
+    # Volitelně toast
+    st.toast("Nový úkol je připraven!", icon="🎉")
+
+    # Vyčistíme session_state po zobrazení (aby se nezobrazovala stále)
+    del st.session_state['task_added_success']
+    if 'task_added_details' in st.session_state:
+        del st.session_state['task_added_details']
+
+# Varování na fork/split (pokud existuje)
+if 'fork_warning' in st.session_state:
+    st.warning(
+        f"Vytvořili jste fork/split – nadřazený úkol má nyní {st.session_state['fork_warning']} potomků."
+    )
+    del st.session_state['fork_warning']
+
+# Kolize kontrola (zachováno)
+if 'task_id_for_collision' in locals():  # pokud máš task_id z try
+    if check_collisions(task_id):
+        colliding = get_colliding_projects(task_id)
+        st.warning(f"⚠️ Kolize s projekty: {', '.join(colliding)}")
+        col_y, col_n = st.columns(2)
+        if col_y.button("Přesto přidat"):
+            st.success("Úkol přidán i přes kolizi.")
+        if col_n.button("Zrušit"):
+            delete_task(task_id)
+            st.info("Přidání zrušeno.")
 
     elif option == "Prohlížet / Upravovat úkoly":
         st.header("Prohlížet / Upravovat úkoly")
