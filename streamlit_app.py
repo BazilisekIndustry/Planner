@@ -128,7 +128,6 @@ def calculate_end_date(start_yyyymmdd, hours, mode):
 # DATABÁZOVÉ FUNKCE
 # ============================
 def init_db():
-    # Tabulky jsou vytvořené v Supabase
     pass
 
 def get_projects():
@@ -173,7 +172,6 @@ def add_project(project_id, name):
 def get_tasks(project_id):
     response = supabase.table('tasks').select('*').eq('project_id', project_id).execute()
     return response.data
-
 
 def add_task(project_id, workplace_id, hours, mode, start_ddmmyyyy=None, notes='', bodies_count=1, is_active=True, parent_id=None):
     start_yyyymmdd = ddmmyyyy_to_yyyymmdd(start_ddmmyyyy) if start_ddmmyyyy else None
@@ -427,7 +425,6 @@ if st.session_state.get('authentication_status'):
             st.error("Přístup jen pro administrátory a normální uživatele.")
         else:
             col1, col2 = st.columns(2)
-
             with col1:
                 st.subheader("Přidat projekt")
                 proj_id = st.text_input("Číslo projektu (povinné)", key="new_proj_id")
@@ -436,10 +433,9 @@ if st.session_state.get('authentication_status'):
                     if proj_id.strip():
                         try:
                             if add_project(proj_id.strip(), proj_name.strip()):
-                                # Uložíme úspěch do session_state
                                 st.session_state['project_added_success'] = True
                                 st.session_state['project_added_id'] = proj_id.strip()
-                                st.rerun()  # Rerun ihned
+                                st.rerun()
                             else:
                                 st.error("Projekt již existuje nebo chyba při vkládání.")
                         except Exception as e:
@@ -447,18 +443,17 @@ if st.session_state.get('authentication_status'):
                     else:
                         st.error("Zadejte číslo projektu.")
 
-            # Zobrazení notifikace pro projekt (mimo button)
+            # Notifikace pro projekt – mimo sloupec
             if st.session_state.get('project_added_success', False):
                 proj_id = st.session_state['project_added_id']
                 st.success(f"Projekt {proj_id} úspěšně přidán! 🎉")
                 st.confetti()
                 st.balloons()
-                #st.toast("Nový projekt je připraven!", icon="🚀")
                 del st.session_state['project_added_success']
                 if 'project_added_id' in st.session_state:
                     del st.session_state['project_added_id']
 
-            # Sloupec pro přidání úkolu – ZDE, mimo podmínku!
+            # Sloupec pro přidání úkolu – vždy viditelný
             with col2:
                 st.subheader("Přidat úkol")
                 with st.form(key="add_task_form"):
@@ -489,7 +484,6 @@ if st.session_state.get('authentication_status'):
                         start_ddmmyyyy = start_date_obj.strftime('%d.%m.%Y') if start_date_obj else None
                         notes = st.text_area("Poznámka")
                         bodies_count = st.number_input("Počet těles", min_value=1, step=1)
-
                         active_choice = st.radio(
                             "Stav těles",
                             ["Aktivní", "Neaktivní"],
@@ -497,8 +491,6 @@ if st.session_state.get('authentication_status'):
                             horizontal=True
                         )
                         is_active = (active_choice == "Aktivní")
-
-                        # Výběr parenta
                         if project_id:
                             possible_parents = get_tasks(project_id)
                             parent_options = ["Žádný (root)"] + [
@@ -538,8 +530,6 @@ if st.session_state.get('authentication_status'):
                                     is_active=is_active,
                                     parent_id=parent_id
                                 )
-
-                                # Uložíme úspěch do session_state pro úkol
                                 st.session_state['task_added_success'] = True
                                 st.session_state['task_added_details'] = {
                                     'project': project_id,
@@ -548,19 +538,15 @@ if st.session_state.get('authentication_status'):
                                     'mode': capacity_mode,
                                     'start': start_ddmmyyyy or 'automaticky'
                                 }
-
-                                # Fork/split varování
                                 if parent_id:
                                     children_count = len(get_children(parent_id))
                                     if children_count > 1:
                                         st.session_state['fork_warning'] = children_count
-
                                 st.rerun()
-
                             except Exception as e:
                                 st.error(f"Chyba při přidávání úkolu: {e}")
 
-            # Zobrazení notifikace pro úkol (mimo form a sloupec)
+            # Notifikace pro úkol – mimo sloupce a form
             if st.session_state.get('task_added_success', False):
                 details = st.session_state['task_added_details']
                 st.success(
@@ -581,173 +567,153 @@ if st.session_state.get('authentication_status'):
                 st.warning(f"Vytvořili jste fork/split – nadřazený úkol má nyní {st.session_state['fork_warning']} potomků.")
                 del st.session_state['fork_warning']
 
-# Kolize kontrola (zachováno)
-if 'task_id_for_collision' in locals():  # pokud máš task_id z try
-    if check_collisions(task_id):
-        colliding = get_colliding_projects(task_id)
-        st.warning(f"⚠️ Kolize s projekty: {', '.join(colliding)}")
-        col_y, col_n = st.columns(2)
-        if col_y.button("Přesto přidat"):
-            st.success("Úkol přidán i přes kolizi.")
-        if col_n.button("Zrušit"):
-            delete_task(task_id)
-            st.info("Přidání zrušeno.")
-
     elif option == "Prohlížet / Upravovat úkoly":
         st.header("Prohlížet / Upravovat úkoly")
 
         if read_only:
             st.warning("V režimu prohlížení nelze provádět úpravy.")
 
-        # Hezké zobrazení projektů: "ID – Název"
-        projects = get_projects()  # vrací [(id, name), ...]
-
+        projects = get_projects()
         if not projects:
             st.info("Nejprve přidejte alespoň jeden projekt.")
-            st.stop()  # Zde zastavíme, pokud není žádný projekt
-
-        display_options = [(f"{pid} – {name or 'bez názvu'}", pid) for pid, name in projects]
-
-        selected_display, selected_project = st.selectbox(
-            "Vyberte projekt",
-            options=display_options,
-            format_func=lambda x: x[0],  # zobrazí "ID – Název"
-            index=0,
-            key="edit_proj"
-        )
-
-        # Tlačítko pro rekalkulaci
-        if st.button("Rekalkulovat projekt"):
-            recalculate_project(selected_project)
-            st.success("Projekt přepočítán.")
-            st.rerun()
-
-        # Zde už víme, že máme vybraný projekt → načteme úkoly
-        tasks = get_tasks(selected_project)
-
-        if not tasks:
-            st.info(f"V projektu {selected_display} zatím nejsou žádné úkoly.")
         else:
-            collisions = mark_all_collisions()
-            data = []
-            for t in tasks:
-                wp_name = get_workplace_name(t['workplace_id'])
-                start_disp = yyyymmdd_to_ddmmyyyy(t['start_date']) if t['start_date'] else ""
-                end_disp = yyyymmdd_to_ddmmyyyy(t['end_date']) if t['end_date'] else ""
-                coll_text = ""
-                if collisions.get(t['id'], False):
-                    colliding = get_colliding_projects(t['id'])
-                    coll_text = f"⚠️ Kolize: {', '.join(colliding)}"
-                status_display = t['status']
-                if t['status'] == 'done':
-                    status_display = "✅ Hotovo"
-                elif t['status'] == 'canceled':
-                    status_display = f"❌ Zrušeno ({t.get('reason') or '-'})"
-                data.append({
-                    "ID": t['id'],
-                    "Pracoviště": wp_name,
-                    "Hodiny": t['hours'],
-                    "Režim": t['capacity_mode'],
-                    "Začátek": start_disp,
-                    "Konec": end_disp,
-                    "Stav": status_display,
-                    "Poznámka": t.get('notes', "") or "",
-                    "Kolize": coll_text,
-                    "Počet těles": t['bodies_count'],
-                    "Aktivní": "Ano" if t['is_active'] else "Ne"
-                })
-
-            df = pd.DataFrame(data)
-
-            grid_response = AgGrid(
-                df,
-                height=500,
-                editable=not read_only,
-                gridOptions={
-                    "columnDefs": [
-                        {"field": "Pracoviště", "width": 220},
-                        {"field": "Hodiny", "width": 100},
-                        {"field": "Režim", "width": 100},
-                        {"field": "Začátek", "editable": not read_only, "width": 140},
-                        {"field": "Konec", "width": 140},
-                        {"field": "Stav", "width": 160},
-                        {"field": "Poznámka", "width": 250},
-                        {"field": "Kolize", "cellStyle": {"color": "red", "fontWeight": "bold"}, "width": 220},
-                        {"field": "Počet těles", "width": 120},
-                        {"field": "Aktivní", "width": 100}
-                    ],
-                    "defaultColDef": {"resizable": True, "sortable": True, "filter": True}
-                },
-                update_mode=GridUpdateMode.VALUE_CHANGED,
-                data_return_mode=DataReturnMode.AS_INPUT,
-                fit_columns_on_grid_load=True,
-                theme="streamlit"
+            display_options = [(f"{pid} – {name or 'bez názvu'}", pid) for pid, name in projects]
+            selected_display, selected_project = st.selectbox(
+                "Vyberte projekt",
+                options=display_options,
+                format_func=lambda x: x[0],
+                index=0,
+                key="edit_proj"
             )
 
-            updated_df = grid_response['data']
-            changes_made = False
-            for _, row in updated_df.iterrows():
-                task_id = row['ID']
-                new_start_raw = row['Začátek']
-                new_start_str = str(new_start_raw).strip() if pd.notna(new_start_raw) else ""
-                task = get_task(task_id)
-                original_start = yyyymmdd_to_ddmmyyyy(task['start_date']) if task['start_date'] else ""
-                if new_start_str != original_start:
-                    if new_start_str and not validate_ddmmyyyy(new_start_str):
-                        st.error(f"Neplatné datum u úkolu: '{new_start_str}'. Použijte DD.MM.YYYY.")
-                    else:
-                        try:
-                            update_task(task_id, 'start_date', new_start_str)
-                            recalculate_from_task(task_id)
-                            changes_made = True
-                        except Exception as e:
-                            st.error(f"Chyba při úpravě úkolu: {e}")
-
-            if changes_made:
-                st.success("Změny uloženy a termíny přepočítány.")
+            if st.button("Rekalkulovat projekt"):
+                recalculate_project(selected_project)
+                st.success("Projekt přepočítán.")
                 st.rerun()
 
-        # Změna stavu úkolu (pokud máme úkoly)
-        if tasks:
-            st.markdown("### Změna stavu úkolu")
-            task_options = [f"{t['id'][:8]}... ({yyyymmdd_to_ddmmyyyy(t['start_date']) or 'bez data'})" for t in tasks]
-            selected_task_display = st.selectbox("Vyberte úkol", task_options, key="status_change_order")
-            selected_task_idx = task_options.index(selected_task_display)
-            selected_task_id = tasks[selected_task_idx]['id']
+            tasks = get_tasks(selected_project)
+            if not tasks:
+                st.info(f"V projektu {selected_display} zatím nejsou žádné úkoly.")
+            else:
+                collisions = mark_all_collisions()
+                data = []
+                for t in tasks:
+                    wp_name = get_workplace_name(t['workplace_id'])
+                    start_disp = yyyymmdd_to_ddmmyyyy(t['start_date']) if t['start_date'] else ""
+                    end_disp = yyyymmdd_to_ddmmyyyy(t['end_date']) if t['end_date'] else ""
+                    coll_text = ""
+                    if collisions.get(t['id'], False):
+                        colliding = get_colliding_projects(t['id'])
+                        coll_text = f"⚠️ Kolize: {', '.join(colliding)}"
+                    status_display = t['status']
+                    if t['status'] == 'done':
+                        status_display = "✅ Hotovo"
+                    elif t['status'] == 'canceled':
+                        status_display = f"❌ Zrušeno ({t.get('reason') or '-'})"
+                    data.append({
+                        "ID": t['id'],
+                        "Pracoviště": wp_name,
+                        "Hodiny": t['hours'],
+                        "Režim": t['capacity_mode'],
+                        "Začátek": start_disp,
+                        "Konec": end_disp,
+                        "Stav": status_display,
+                        "Poznámka": t.get('notes', "") or "",
+                        "Kolize": coll_text,
+                        "Počet těles": t['bodies_count'],
+                        "Aktivní": "Ano" if t['is_active'] else "Ne"
+                    })
 
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("Označit jako Hotovo"):
-                    update_task(selected_task_id, 'status', 'done')
-                    recalculate_from_task(selected_task_id)
-                    st.success("Úkol označen jako hotový.")
+                df = pd.DataFrame(data)
+
+                grid_response = AgGrid(
+                    df,
+                    height=500,
+                    editable=not read_only,
+                    gridOptions={
+                        "columnDefs": [
+                            {"field": "Pracoviště", "width": 220},
+                            {"field": "Hodiny", "width": 100},
+                            {"field": "Režim", "width": 100},
+                            {"field": "Začátek", "editable": not read_only, "width": 140},
+                            {"field": "Konec", "width": 140},
+                            {"field": "Stav", "width": 160},
+                            {"field": "Poznámka", "width": 250},
+                            {"field": "Kolize", "cellStyle": {"color": "red", "fontWeight": "bold"}, "width": 220},
+                            {"field": "Počet těles", "width": 120},
+                            {"field": "Aktivní", "width": 100}
+                        ],
+                        "defaultColDef": {"resizable": True, "sortable": True, "filter": True}
+                    },
+                    update_mode=GridUpdateMode.VALUE_CHANGED,
+                    data_return_mode=DataReturnMode.AS_INPUT,
+                    fit_columns_on_grid_load=True,
+                    theme="streamlit"
+                )
+
+                updated_df = grid_response['data']
+                changes_made = False
+                for _, row in updated_df.iterrows():
+                    task_id = row['ID']
+                    new_start_raw = row['Začátek']
+                    new_start_str = str(new_start_raw).strip() if pd.notna(new_start_raw) else ""
+                    task = get_task(task_id)
+                    original_start = yyyymmdd_to_ddmmyyyy(task['start_date']) if task['start_date'] else ""
+                    if new_start_str != original_start:
+                        if new_start_str and not validate_ddmmyyyy(new_start_str):
+                            st.error(f"Neplatné datum u úkolu: '{new_start_str}'. Použijte DD.MM.YYYY.")
+                        else:
+                            try:
+                                update_task(task_id, 'start_date', new_start_str)
+                                recalculate_from_task(task_id)
+                                changes_made = True
+                            except Exception as e:
+                                st.error(f"Chyba při úpravě úkolu: {e}")
+
+                if changes_made:
+                    st.success("Změny uloženy a termíny přepočítány.")
                     st.rerun()
 
-            with col2:
-                reason = st.text_input("Důvod zrušení", key="cancel_reason_input")
-                if st.button("Označit jako Zrušeno"):
-                    if reason.strip():
-                        update_task(selected_task_id, 'reason', reason.strip())
-                        update_task(selected_task_id, 'status', 'canceled')
-                        recalculate_from_task(selected_task_id)
-                        st.success("Úkol zrušen.")
-                        st.rerun()
-                    else:
-                        st.error("Zadejte důvod zrušení.")
+                if tasks:
+                    st.markdown("### Změna stavu úkolu")
+                    task_options = [f"{t['id'][:8]}... ({yyyymmdd_to_ddmmyyyy(t['start_date']) or 'bez data'})" for t in tasks]
+                    selected_task_display = st.selectbox("Vyberte úkol", task_options, key="status_change_order")
+                    selected_task_idx = task_options.index(selected_task_display)
+                    selected_task_id = tasks[selected_task_idx]['id']
 
-            if role == 'admin':
-                st.markdown("### Servisní mazání úkolu (pouze admin)")
-                delete_options = task_options
-                delete_display = st.selectbox("Vyberte úkol k smazání", delete_options, key="admin_delete")
-                delete_idx = delete_options.index(delete_display)
-                delete_task_id = tasks[delete_idx]['id']
-                if st.checkbox("Potvrďte smazání tohoto úkolu (neodvolatelné!)"):
-                    if st.button("SMAZAT ÚKOL"):
-                        if delete_task(delete_task_id):
-                            st.success("Úkol smazán.")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button("Označit jako Hotovo"):
+                            update_task(selected_task_id, 'status', 'done')
+                            recalculate_from_task(selected_task_id)
+                            st.success("Úkol označen jako hotový.")
                             st.rerun()
-                        else:
-                            st.error("Chyba při mazání.")
+
+                    with col2:
+                        reason = st.text_input("Důvod zrušení", key="cancel_reason_input")
+                        if st.button("Označit jako Zrušeno"):
+                            if reason.strip():
+                                update_task(selected_task_id, 'reason', reason.strip())
+                                update_task(selected_task_id, 'status', 'canceled')
+                                recalculate_from_task(selected_task_id)
+                                st.success("Úkol zrušen.")
+                                st.rerun()
+                            else:
+                                st.error("Zadejte důvod zrušení.")
+
+                    if role == 'admin':
+                        st.markdown("### Servisní mazání úkolu (pouze admin)")
+                        delete_options = task_options
+                        delete_display = st.selectbox("Vyberte úkol k smazání", delete_options, key="admin_delete")
+                        delete_idx = delete_options.index(delete_display)
+                        delete_task_id = tasks[delete_idx]['id']
+                        if st.checkbox("Potvrďte smazání tohoto úkolu (neodvolatelné!)"):
+                            if st.button("SMAZAT ÚKOL"):
+                                if delete_task(delete_task_id):
+                                    st.success("Úkol smazán.")
+                                    st.rerun()
+                                else:
+                                    st.error("Chyba při mazání.")
 
     elif option == "Správa pracovišť":
         if role != 'admin':
@@ -869,7 +835,6 @@ if 'task_id_for_collision' in locals():  # pokud máš task_id z try
         for t in all_tasks:
             tid = t['id']
             pid = t['project_id']
-            
             wp_id = t['workplace_id']
             hours = t['hours']
             mode = t['capacity_mode']
@@ -885,7 +850,7 @@ if 'task_id_for_collision' in locals():  # pokud máš task_id z try
             end_date = datetime.strptime(end_int, '%Y-%m-%d').date()
             if end_date < first_day or start_date > last_day:
                 continue
-            task_text = f"P{pid}-{order}"
+            task_text = f"P{pid}"
             if check_collisions(tid):
                 task_text += " !"
             color = "#4285f4"
@@ -1084,5 +1049,5 @@ elif st.session_state.get('authentication_status') is None:
 
 if st.session_state.get('authentication_status'):
     st.sidebar.markdown("---")
-    st.sidebar.markdown("Plánovač Horkých komor v1.0")
+    st.sidebar.markdown("Plánovač Horkých komor v1.1")
     st.sidebar.caption("petr.svrcula@cvrez.cz")
