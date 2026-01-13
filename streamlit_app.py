@@ -492,7 +492,7 @@ if st.session_state.get('authentication_status'):
                         wp_names = [name for _, name in get_workplaces()]
                         wp_name = st.selectbox("Pracoviště", wp_names)
                         wp_id = next((wid for wid, name in get_workplaces() if name == wp_name), None)
-                        hours = st.number_input("Počet hodin", min_value=0.5, step=0.5, format="%.1f")
+                        hours = st.number_input("Počet hodin", min_value=1, step=1, format="%d")
                         bodies_count = st.number_input("Počet těles", min_value=1, step=1)
                         active_choice = st.radio(
                             "Stav těles",
@@ -625,7 +625,21 @@ if st.session_state.get('authentication_status'):
                 else:
                     status_display = "Pending"
 
-                # Detailní popis pro tabulku i dropdown
+                # Nový sloupec: Parent úkol
+                parent_id = get_parent(t['id'])
+                if parent_id:
+                    parent_task = get_task(parent_id)
+                    if parent_task:
+                        parent_wp = get_workplace_name(parent_task['workplace_id'])
+                        parent_start = yyyymmdd_to_ddmmyyyy(parent_task['start_date']) or 'bez data'
+                        parent_notes = parent_task['notes'][:30] or 'bez poznámky'
+                        parent_desc = f"P{selected_project} – {parent_wp} – {parent_start} – {parent_notes}..."
+                    else:
+                        parent_desc = f"ID {parent_id[:8]}... (nenalezen)"
+                else:
+                    parent_desc = "— (root)"
+
+                # Detailní popis pro tabulku
                 task_desc = (
                     f"P{selected_project} – {wp_name} – {start_disp} – {t['hours']}h – "
                     f"{status_icon}{status_display} – {t['notes'][:40] or 'bez poznámky'}..."
@@ -633,6 +647,7 @@ if st.session_state.get('authentication_status'):
 
                 data.append({
                     "ID": t['id'],
+                    "Parent úkol": parent_desc,           # ← NOVÝ SLOUPEC
                     "Popis": task_desc,
                     "Pracoviště": wp_name,
                     "Hodiny": t['hours'],
@@ -648,14 +663,14 @@ if st.session_state.get('authentication_status'):
 
             df = pd.DataFrame(data)
 
-            # Zobrazení tabulky úkolů
             grid_response = AgGrid(
                 df,
                 height=500,
                 editable=not read_only,
                 gridOptions={
                     "columnDefs": [
-                        {"field": "Popis", "width": 400},  # Hlavní sloupec pro rychlou identifikaci
+                        {"field": "Parent úkol", "width": 300},  # ← NOVÝ SLOUPEC NA ZAČÁTEK
+                        {"field": "Popis", "width": 400},
                         {"field": "Pracoviště", "width": 220},
                         {"field": "Hodiny", "width": 100},
                         {"field": "Režim", "width": 100},
@@ -675,6 +690,7 @@ if st.session_state.get('authentication_status'):
                 theme="streamlit"
             )
 
+            # Zbytek kódu (změna stavu, mazání) zůstává stejný jako v předchozí verzi
             updated_df = grid_response['data']
             changes_made = False
             for _, row in updated_df.iterrows():
@@ -698,7 +714,6 @@ if st.session_state.get('authentication_status'):
                 st.success("Změny uloženy a termíny přepočítány.")
                 st.rerun()
 
-            # Změna stavu úkolu – jen úkoly z vybraného projektu
             if tasks:
                 st.markdown("### Změna stavu úkolu")
                 task_options = []
