@@ -124,6 +124,21 @@ def calculate_end_date(start_yyyymmdd, hours, mode):
         current += timedelta(days=1)
     return (current - timedelta(days=1)).strftime('%Y-%m-%d')
 
+def get_next_working_day_after(date_str, capacity_mode):
+    """
+    Vrátí první pracovní den následující po zadaném datu (podle režimu 7.5/24h).
+    Pokud vstupní datum je None → vrací None.
+    """
+    if not date_str:
+        return None
+    
+    current = datetime.strptime(date_str, '%Y-%m-%d').date() + timedelta(days=1)
+    
+    while not is_working_day(current, capacity_mode):
+        current += timedelta(days=1)
+    
+    return current.strftime('%Y-%m-%d')
+
 # ============================
 # DATABÁZOVÉ FUNKCE
 # ============================
@@ -227,25 +242,50 @@ def has_cycle(task_id):
         current = get_parent(current)
     return False
 
-def recalculate_from_task(start_task_id):
-    task = get_task(start_task_id)
+def recalculate_from_task(task_id):
+    """
+    Přepočítá end_date aktuálního úkolu a rekurzivně nastaví start_date 
+    a přepočítá všechny potomky (sekvenční závislost).
+    """
+    task = get_task(task_id)
     if not task:
         return
-    current_start_yyyymmdd = task['start_date']
+
+    # 1. Pokud je úkol zrušený → všechno vynulujeme
     if task['status'] == 'canceled':
-        current_start_yyyymmdd = None
-    children = get_children(start_task_id)
+        update_task(task_id, 'end_date', None, is_internal=True)
+        child_start = None
+    else:
+        # 2. Máme start_date → dopočítáme end_date
+        if task['start_date']:
+            end_date = calculate_end_date(
+                task['start_date'],
+                task['hours'],
+                task['capacity_mode']
+            )
+            update_task(task_id, 'end_date', end_date, is_internal=True)
+            
+            # Datum, od kterého mohou začít děti
+            child_start = get_next_working_day_after(
+                end_date,
+                task['capacity_mode']
+            )
+        else:
+            # Nemáme start → nemůžeme nic dopočítat
+            update_task(task_id, 'end_date', None, is_internal=True)
+            child_start = None
+
+    # 3. Nastavíme start_date všem přímým potomkům a rekurzivně je přepočítáme
+    children = get_children(task_id)
     for child_id in children:
         child = get_task(child_id)
         if not child or child['status'] == 'canceled':
             continue
-        if current_start_yyyymmdd is None:
-            update_task(child_id, 'start_date', None, is_internal=True)
-            update_task(child_id, 'end_date', None, is_internal=True)
-        else:
-            update_task(child_id, 'start_date', current_start_yyyymmdd, is_internal=True)
-            end_yyyymmdd = calculate_end_date(current_start_yyyymmdd, child['hours'], child['capacity_mode'])
-            update_task(child_id, 'end_date', end_yyyymmdd, is_internal=True)
+
+        # Nastavíme start dítěte (i když je to jen None)
+        update_task(child_id, 'start_date', child_start, is_internal=True)
+        
+        # Rekurze – dítě si samo dopočítá svůj end_date a předá dál
         recalculate_from_task(child_id)
 
 def recalculate_project(project_id):
@@ -712,6 +752,7 @@ if st.session_state.get('authentication_status'):
 
             if changes_made:
                 st.success("Změny uloženy a termíny přepočítány.")
+                recalculate_project(selected_project)   # ← zajistí konzistenci celého projektu
                 st.rerun()
 
             if tasks:
