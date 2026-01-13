@@ -207,6 +207,40 @@ def get_tasks(project_id):
 
 def add_task(project_id, workplace_id, hours, mode, start_ddmmyyyy=None, notes='', bodies_count=1, is_active=True, parent_id=None):
     start_yyyymmdd = ddmmyyyy_to_yyyymmdd(start_ddmmyyyy) if start_ddmmyyyy else None
+    
+    # Nejprve kontrola kolizí v rámci stejného projektu
+    temp_task = {
+        'project_id': project_id,
+        'workplace_id': workplace_id,
+        'hours': hours,
+        'capacity_mode': mode,
+        'start_date': start_yyyymmdd,
+        'notes': notes,
+        'bodies_count': bodies_count,
+        'is_active': is_active
+    }
+    
+    # Pokud má start_date, dopočítáme end_date pro kontrolu
+    if start_yyyymmdd:
+        temp_task['end_date'] = calculate_end_date(start_yyyymmdd, hours, mode)
+    else:
+        temp_task['end_date'] = None  # Bez data nelze kontrolovat kolize
+    
+    if temp_task['end_date']:
+        # Získáme existující úkoly v projektu na stejném pracovišti s daty
+        existing = supabase.table('tasks').select('id, start_date, end_date').eq('project_id', project_id).eq('workplace_id', workplace_id).not_.is_('start_date', 'null').not_.is_('end_date', 'null').execute()
+        
+        for ex in existing.data:
+            ex_start = datetime.strptime(ex['start_date'], '%Y-%m-%d').date()
+            ex_end = datetime.strptime(ex['end_date'], '%Y-%m-%d').date()
+            new_start = datetime.strptime(temp_task['start_date'], '%Y-%m-%d').date()
+            new_end = datetime.strptime(temp_task['end_date'], '%Y-%m-%d').date()
+            
+            if not (new_end < ex_start or new_start > ex_end):
+                # Kolize v rámci projektu → nepřidávat
+                return None  # Vrátíme None pro indikaci chyby
+    
+    # Žádná intra-projekt kolize → přidáme úkol
     data = {
         'project_id': project_id,
         'workplace_id': workplace_id,
@@ -219,10 +253,19 @@ def add_task(project_id, workplace_id, hours, mode, start_ddmmyyyy=None, notes='
     }
     response = supabase.table('tasks').insert(data).execute()
     task_id = response.data[0]['id']
+    
     if parent_id:
         supabase.table('task_dependencies').insert({'task_id': task_id, 'parent_id': parent_id}).execute()
+    
     if start_yyyymmdd:
         recalculate_from_task(task_id)
+    
+    # Po přidání zkontrolujeme cross-projekt kolize (pro upozornění)
+    if check_collisions(task_id):
+        # Zde jen upozornění – úkol je už přidán
+        colliding_projects = get_colliding_projects(task_id)
+        st.warning(f"Nový úkol {task_id} má kolizi s projekty: {', '.join(colliding_projects)}")
+    
     return task_id
 
 def update_task(task_id, field, value, is_internal=False):
@@ -322,14 +365,14 @@ def get_colliding_projects(task_id):
     wp = task['workplace_id']
     start = datetime.strptime(task['start_date'], '%Y-%m-%d').date()
     end = datetime.strptime(task['end_date'], '%Y-%m-%d').date()
-    response = supabase.table('tasks').select('project_id').eq('workplace_id', wp).neq('id', task_id).not_.is_('start_date', 'null').not_.is_('end_date', 'null').execute()
+    response = supabase.table('tasks').select('project_id, start_date, end_date').eq('workplace_id', wp).neq('id', task_id).not_.is_('start_date', 'null').not_.is_('end_date', 'null').execute()
     colliding = []
     for row in response.data:
         row_start = datetime.strptime(row['start_date'], '%Y-%m-%d').date()
         row_end = datetime.strptime(row['end_date'], '%Y-%m-%d').date()
         if not (end < row_start or start > row_end):
             colliding.append(row['project_id'])
-    return colliding
+    return list(set(colliding))  # Odstranění duplicit pro jistotu
 
 def check_collisions(task_id):
     return len(get_colliding_projects(task_id)) > 0
@@ -590,19 +633,22 @@ if st.session_state.get('authentication_status'):
                                     is_active=is_active,
                                     parent_id=parent_id
                                 )
-                                st.session_state['task_added_success'] = True
-                                st.session_state['task_added_details'] = {
-                                    'project': project_id,
-                                    'workplace': wp_name,
-                                    'hours': hours,
-                                    'mode': capacity_mode,
-                                    'start': start_ddmmyyyy or 'automaticky'
-                                }
-                                if parent_id:
-                                    children_count = len(get_children(parent_id))
-                                    if children_count > 1:
-                                        st.session_state['fork_warning'] = children_count
-                                st.rerun()
+                                if task_id is None:
+                                    st.error("Kolize v rámci projektu na stejném pracovišti. Upravte existující úkol(y) a zkuste znovu.")
+                                else:
+                                    st.session_state['task_added_success'] = True
+                                    st.session_state['task_added_details'] = {
+                                        'project': project_id,
+                                        'workplace': wp_name,
+                                        'hours': hours,
+                                        'mode': capacity_mode,
+                                        'start': start_ddmmyyyy or 'automaticky'
+                                    }
+                                    if parent_id:
+                                        children_count = len(get_children(parent_id))
+                                        if children_count > 1:
+                                            st.session_state['fork_warning'] = children_count
+                                    st.rerun()
                             except Exception as e:
                                 st.error(f"Chyba při přidávání úkolu: {e}")
 
@@ -652,6 +698,18 @@ if st.session_state.get('authentication_status'):
         if st.button("Rekalkulovat projekt"):
             recalculate_project(selected_project)
             st.success("Projekt přepočítán.")
+            
+            # Po rekalkulaci zkontrolujeme kolize v celém projektu
+            tasks = get_tasks(selected_project)
+            collisions = mark_all_collisions()
+            colliding_tasks = [tid for tid, has_coll in collisions.items() if has_coll and get_task(tid)['project_id'] == selected_project]
+            if colliding_tasks:
+                colliding_info = []
+                for tid in colliding_tasks:
+                    coll_projects = get_colliding_projects(tid)
+                    colliding_info.append(f"Úkol {tid}: kolize s {', '.join(coll_projects)}")
+                st.warning("Po rekalkulaci detekovány kolize:\n" + "\n".join(colliding_info))
+            
             st.rerun()
 
         # Načtení úkolů – jen z vybraného projektu
@@ -726,7 +784,7 @@ if st.session_state.get('authentication_status'):
                 editable=not read_only,
                 gridOptions={
                     "columnDefs": [
-                        {"field": "Parent úkol", "width": 300},  # ← NOVÝ SLOUPEC NA ZAČÁTEK
+                        {"field": "Parent úkol", "width": 300},
                         {"field": "Popis", "width": 400},
                         {"field": "Pracoviště", "width": 220},
                         {"field": "Hodiny", "width": 100},
@@ -739,7 +797,12 @@ if st.session_state.get('authentication_status'):
                         {"field": "Počet těles", "width": 120},
                         {"field": "Aktivní", "width": 100}
                     ],
-                    "defaultColDef": {"resizable": True, "sortable": True, "filter": True}
+                    "defaultColDef": {"resizable": True, "sortable": True, "filter": True},
+                    "getRowStyle": {  # Přidáno pro barevné řádky
+                        "params": {
+                            "style": "params.data.Kolize !== '' ? {'backgroundColor': '#ffcccc'} : {};"
+                        }
+                    }
                 },
                 update_mode=GridUpdateMode.VALUE_CHANGED,
                 data_return_mode=DataReturnMode.AS_INPUT,
