@@ -777,7 +777,15 @@ if st.session_state.get('authentication_status'):
                 })
 
             df = pd.DataFrame(data)
+            # Nejprve definujeme CSS pro konfliktní řádky (můžeš přidat kamkoli před AgGrid, ideálně na začátek sekce)
+            custom_css = {
+                ".conflict-row": {
+                    "background-color": "#ffcccc !important",  # světle červená
+                    # volitelně: "border-left": "4px solid #ff0000 !important",
+                }
+            }
 
+            # Pak AgGrid s rowClassRules (bez nebezpečného JS kódu)
             grid_response = AgGrid(
                 df,
                 height=500,
@@ -799,23 +807,19 @@ if st.session_state.get('authentication_status'):
                     ],
                     "defaultColDef": {"resizable": True, "sortable": True, "filter": True},
                     
-                    # Správný způsob definice getRowStyle (Python callable)
-                    "getRowStyle": {
-                        "function": """
-                            function(params) {
-                                if (params.data && params.data.Kolize && params.data.Kolize.trim() !== '') {
-                                    return { 'backgroundColor': '#ffcccc' };  // světle červená
-                                }
-                                return null;
-                            }
-                        """
+                    # Toto je bezpečný způsob – pravidlo jako string (ne funkce!)
+                    "rowClassRules": {
+                        "conflict-row": "params.data && params.data['Kolize'] && params.data['Kolize'].trim() !== ''"
                     }
                 },
                 update_mode=GridUpdateMode.VALUE_CHANGED,
                 data_return_mode=DataReturnMode.AS_INPUT,
                 fit_columns_on_grid_load=True,
-                theme="streamlit"
+                theme="streamlit",
+                custom_css=custom_css,          # ← zde přidáme náš styl
+                allow_unsafe_jscode=False       # ← bezpečnější, ideálně vypnuto
             )
+            
 
             # Zbytek kódu (změna stavu, mazání) zůstává stejný jako v předchozí verzi
             updated_df = grid_response['data']
