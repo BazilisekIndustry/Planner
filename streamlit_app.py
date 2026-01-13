@@ -28,7 +28,7 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 try:
     pdfmetrics.registerFont(TTFont('DejaVu', 'DejaVuSans.ttf'))
     PDF_FONT = 'DejaVu'
-except:
+except Exception:
     print("Varování: Font DejaVuSans.ttf nebyl nalezen – diakritika v PDF nemusí fungovat správně.")
     PDF_FONT = 'Helvetica'
 
@@ -47,6 +47,7 @@ def get_easter(year):
     easter_sunday = date(year, month, day)
     return easter_sunday + timedelta(days=1)
 
+
 def get_holidays(year):
     return [
         date(year, 1, 1),
@@ -63,70 +64,72 @@ def get_holidays(year):
         date(year, 12, 26),
     ]
 
+
 def is_holiday(dt):
     holidays = get_holidays(dt.year)
-    if dt.month == 1: holidays += get_holidays(dt.year - 1)
-    if dt.month == 12: holidays += get_holidays(dt.year + 1)
+    if dt.month == 1:
+        holidays += get_holidays(dt.year - 1)
+    if dt.month == 12:
+        holidays += get_holidays(dt.year + 1)
     return dt in holidays
+
 
 def is_weekend_or_holiday(dt):
     return dt.weekday() >= 5 or is_holiday(dt)
+
 
 def is_working_day(dt, mode):
     if mode == '7.5' and dt.weekday() >= 5:
         return False
     return not is_holiday(dt)
 
+
 def normalize_date_str(date_str):
-    """Normalizuje různé formáty oddělovačů a ořízne mezery"""
     if not date_str:
         return None
-    # Nahradíme všechny běžné oddělovače za pomlčku
-    normalized = re.sub(r'[./]', '-', date_str.strip())
-    return normalized
+    return re.sub(r'[./]', '-', date_str.strip())
+
 
 def ddmmyyyy_to_yyyymmdd(date_str):
-    """Převod z různých DD.MM.YYYY formátů do YYYY-MM-DD"""
     if not date_str or not date_str.strip():
         return None
-    
+
     normalized = normalize_date_str(date_str)
     try:
         day, month, year = map(int, normalized.split('-'))
-        # Zde už můžeme použít datetime pro plnou validaci (nejbezpečnější)
         dt = date(year, month, day)
         return dt.strftime('%Y-%m-%d')
     except (ValueError, TypeError):
         raise ValueError("Neplatný formát data. Použijte např. 1.1.2026, 01.01.2026, 1-1-2026 apod.")
+
 
 def yyyymmdd_to_ddmmyyyy(date_str):
     if not date_str:
         return ""
     try:
         return datetime.strptime(date_str, '%Y-%m-%d').strftime('%d.%m.%Y')
-    except:
-        return ""              # pro jistotu, kdyby bylo něco špatně
+    except Exception:
+        return ""
+
 
 def validate_ddmmyyyy(date_str):
-    """Rozšířená validace: přijímá 1.1.2026 i 01.01.2026 i 1-1-2026 atd."""
     if not date_str:
         return True
-    
+
     normalized = normalize_date_str(date_str)
-    # Regulární výraz pro DD-MM-YYYY kde D/M může být 1-2 číslice
     pattern = re.compile(r'^(\d{1,2})-(\d{1,2})-(\d{4})$')
     match = pattern.match(normalized)
     if not match:
         return False
-    
+
     try:
         day, month, year = map(int, match.groups())
-        # Základní kontrola rozsahu (není 100% přesná, ale stačí pro UI)
         if not (1 <= day <= 31 and 1 <= month <= 12 and 2000 <= year <= 2100):
             return False
         return True
-    except:
+    except Exception:
         return False
+
 
 def calculate_end_date(start_yyyymmdd, hours, mode):
     if not start_yyyymmdd:
@@ -141,20 +144,15 @@ def calculate_end_date(start_yyyymmdd, hours, mode):
         current += timedelta(days=1)
     return (current - timedelta(days=1)).strftime('%Y-%m-%d')
 
+
 def get_next_working_day_after(date_str, capacity_mode):
-    """
-    Vrátí první pracovní den následující po zadaném datu (podle režimu 7.5/24h).
-    Pokud vstupní datum je None → vrací None.
-    """
     if not date_str:
         return None
-    
     current = datetime.strptime(date_str, '%Y-%m-%d').date() + timedelta(days=1)
-    
     while not is_working_day(current, capacity_mode):
         current += timedelta(days=1)
-    
     return current.strftime('%Y-%m-%d')
+
 
 # ============================
 # DATABÁZOVÉ FUNKCE
@@ -162,21 +160,26 @@ def get_next_working_day_after(date_str, capacity_mode):
 def init_db():
     pass
 
+
 def get_projects():
     response = supabase.table('projects').select('id, name').execute()
     return [(row['id'], row['name']) for row in response.data]
+
 
 def get_project_choices():
     projects = get_projects()
     return [str(p[0]) for p in projects] if projects else []
 
+
 def get_workplaces():
     response = supabase.table('workplaces').select('id, name').execute()
     return [(row['id'], row['name']) for row in response.data]
 
+
 def get_workplace_name(wp_id):
     response = supabase.table('workplaces').select('name').eq('id', wp_id).execute()
     return response.data[0]['name'] if response.data else f"ID {wp_id}"
+
 
 def add_workplace(name):
     if not name.strip():
@@ -184,8 +187,9 @@ def add_workplace(name):
     try:
         supabase.table('workplaces').insert({'name': name.strip()}).execute()
         return True
-    except:
+    except Exception:
         return False
+
 
 def delete_workplace(wp_id):
     response = supabase.table('tasks').select('id').eq('workplace_id', wp_id).execute()
@@ -194,53 +198,23 @@ def delete_workplace(wp_id):
     supabase.table('workplaces').delete().eq('id', wp_id).execute()
     return True
 
+
 def add_project(project_id, name):
     try:
         supabase.table('projects').insert({'id': project_id, 'name': name}).execute()
         return True
-    except:
+    except Exception:
         return False
+
 
 def get_tasks(project_id):
     response = supabase.table('tasks').select('*').eq('project_id', project_id).execute()
     return response.data
 
+
 def add_task(project_id, workplace_id, hours, mode, start_ddmmyyyy=None, notes='', bodies_count=1, is_active=True, parent_id=None):
     start_yyyymmdd = ddmmyyyy_to_yyyymmdd(start_ddmmyyyy) if start_ddmmyyyy else None
-    
-    # Nejprve kontrola kolizí v rámci stejného projektu
-    temp_task = {
-        'project_id': project_id,
-        'workplace_id': workplace_id,
-        'hours': hours,
-        'capacity_mode': mode,
-        'start_date': start_yyyymmdd,
-        'notes': notes,
-        'bodies_count': bodies_count,
-        'is_active': is_active
-    }
-    
-    # Pokud má start_date, dopočítáme end_date pro kontrolu
-    if start_yyyymmdd:
-        temp_task['end_date'] = calculate_end_date(start_yyyymmdd, hours, mode)
-    else:
-        temp_task['end_date'] = None  # Bez data nelze kontrolovat kolize
-    
-    if temp_task['end_date']:
-        # Získáme existující úkoly v projektu na stejném pracovišti s daty
-        existing = supabase.table('tasks').select('id, start_date, end_date').eq('project_id', project_id).eq('workplace_id', workplace_id).not_.is_('start_date', 'null').not_.is_('end_date', 'null').execute()
-        
-        for ex in existing.data:
-            ex_start = datetime.strptime(ex['start_date'], '%Y-%m-%d').date()
-            ex_end = datetime.strptime(ex['end_date'], '%Y-%m-%d').date()
-            new_start = datetime.strptime(temp_task['start_date'], '%Y-%m-%d').date()
-            new_end = datetime.strptime(temp_task['end_date'], '%Y-%m-%d').date()
-            
-            if not (new_end < ex_start or new_start > ex_end):
-                # Kolize v rámci projektu → nepřidávat
-                return None  # Vrátíme None pro indikaci chyby
-    
-    # Žádná intra-projekt kolize → přidáme úkol
+
     data = {
         'project_id': project_id,
         'workplace_id': workplace_id,
@@ -251,22 +225,18 @@ def add_task(project_id, workplace_id, hours, mode, start_ddmmyyyy=None, notes='
         'bodies_count': bodies_count,
         'is_active': is_active
     }
+
     response = supabase.table('tasks').insert(data).execute()
     task_id = response.data[0]['id']
-    
+
     if parent_id:
         supabase.table('task_dependencies').insert({'task_id': task_id, 'parent_id': parent_id}).execute()
-    
+
     if start_yyyymmdd:
         recalculate_from_task(task_id)
-    
-    # Po přidání zkontrolujeme cross-projekt kolize (pro upozornění)
-    if check_collisions(task_id):
-        # Zde jen upozornění – úkol je už přidán
-        colliding_projects = get_colliding_projects(task_id)
-        st.warning(f"Nový úkol {task_id} má kolizi s projekty: {', '.join(colliding_projects)}")
-    
+
     return task_id
+
 
 def update_task(task_id, field, value, is_internal=False):
     if field in ('start_date', 'end_date') and value and not is_internal:
@@ -280,17 +250,21 @@ def update_task(task_id, field, value, is_internal=False):
         'changed_by': st.session_state['username']
     }).execute()
 
+
 def get_task(task_id):
     response = supabase.table('tasks').select('*').eq('id', task_id).execute()
     return response.data[0] if response.data else None
+
 
 def get_parent(task_id):
     response = supabase.table('task_dependencies').select('parent_id').eq('task_id', task_id).execute()
     return response.data[0]['parent_id'] if response.data else None
 
+
 def get_children(parent_id):
     response = supabase.table('task_dependencies').select('task_id').eq('parent_id', parent_id).execute()
     return [row['task_id'] for row in response.data]
+
 
 def has_cycle(task_id):
     visited = set()
@@ -301,52 +275,17 @@ def has_cycle(task_id):
         visited.add(current)
         current = get_parent(current)
     return False
-def get_colliding_projects_simulated(workplace_id, start_date, end_date, exclude_task_id=None):
-    """Simulovaná kontrola kolizí pro ještě nepřidaný úkol"""
-    if not start_date or not end_date:
-        return []
-    
-    start = datetime.strptime(start_date, '%Y-%m-%d').date()
-    end = datetime.strptime(end_date, '%Y-%m-%d').date()
-    
-    query = supabase.table('tasks').select('project_id') \
-        .eq('workplace_id', workplace_id) \
-        .not_.is_('start_date', 'null') \
-        .not_.is_('end_date', 'null')
-    
-    if exclude_task_id:
-        query = query.neq('id', exclude_task_id)
-    
-    response = query.execute()
-    
-    colliding = []
-    for row in response.data:
-        row_task = get_task(row['project_id'])  # lepší přímo načíst data
-        if not row_task or not row_task['start_date'] or not row_task['end_date']:
-            continue
-        row_start = datetime.strptime(row_task['start_date'], '%Y-%m-%d').date()
-        row_end = datetime.strptime(row_task['end_date'], '%Y-%m-%d').date()
-        if not (end < row_start or start > row_end):
-            colliding.append(row_task['project_id'])
-    
-    return list(set(colliding))
 
 
 def recalculate_from_task(task_id):
-    """
-    Přepočítá end_date aktuálního úkolu a rekurzivně nastaví start_date 
-    a přepočítá všechny potomky (sekvenční závislost).
-    """
     task = get_task(task_id)
     if not task:
         return
 
-    # 1. Pokud je úkol zrušený → všechno vynulujeme
     if task['status'] == 'canceled':
         update_task(task_id, 'end_date', None, is_internal=True)
         child_start = None
     else:
-        # 2. Máme start_date → dopočítáme end_date
         if task['start_date']:
             end_date = calculate_end_date(
                 task['start_date'],
@@ -354,29 +293,19 @@ def recalculate_from_task(task_id):
                 task['capacity_mode']
             )
             update_task(task_id, 'end_date', end_date, is_internal=True)
-            
-            # Datum, od kterého mohou začít děti
-            child_start = get_next_working_day_after(
-                end_date,
-                task['capacity_mode']
-            )
+            child_start = get_next_working_day_after(end_date, task['capacity_mode'])
         else:
-            # Nemáme start → nemůžeme nic dopočítat
             update_task(task_id, 'end_date', None, is_internal=True)
             child_start = None
 
-    # 3. Nastavíme start_date všem přímým potomkům a rekurzivně je přepočítáme
     children = get_children(task_id)
     for child_id in children:
         child = get_task(child_id)
         if not child or child['status'] == 'canceled':
             continue
-
-        # Nastavíme start dítěte (i když je to jen None)
         update_task(child_id, 'start_date', child_start, is_internal=True)
-        
-        # Rekurze – dítě si samo dopočítá svůj end_date a předá dál
         recalculate_from_task(child_id)
+
 
 def recalculate_project(project_id):
     tasks = get_tasks(project_id)
@@ -388,29 +317,84 @@ def recalculate_project(project_id):
     for root_id in root_ids:
         recalculate_from_task(root_id)
 
+
+def get_colliding_projects_simulated(workplace_id, start_date, end_date):
+    """
+    Simulovaná kontrola kolizí pro ještě nepřidaný úkol (bez použití task_id).
+    Vrátí seznam project_id, se kterými by nový úkol kolidoval.
+    """
+    if not start_date or not end_date:
+        return []
+
+    try:
+        new_start = datetime.strptime(start_date, '%Y-%m-%d').date()
+        new_end = datetime.strptime(end_date, '%Y-%m-%d').date()
+    except Exception:
+        return []
+
+    response = (
+        supabase.table('tasks')
+        .select('project_id, start_date, end_date')
+        .eq('workplace_id', workplace_id)
+        .not_.is_('start_date', 'null')
+        .not_.is_('end_date', 'null')
+        .execute()
+    )
+
+    colliding = []
+    for row in response.data:
+        try:
+            row_start = datetime.strptime(row['start_date'], '%Y-%m-%d').date()
+            row_end = datetime.strptime(row['end_date'], '%Y-%m-%d').date()
+            if not (new_end < row_start or new_start > row_end):
+                colliding.append(row['project_id'])
+        except Exception:
+            continue
+
+    return list(set(colliding))
+
+
 def get_colliding_projects(task_id):
     task = get_task(task_id)
-    if not task or not task['start_date'] or not task['end_date']:
+    if not task or not task.get('start_date') or not task.get('end_date'):
         return []
+
     wp = task['workplace_id']
     start = datetime.strptime(task['start_date'], '%Y-%m-%d').date()
     end = datetime.strptime(task['end_date'], '%Y-%m-%d').date()
-    response = supabase.table('tasks').select('project_id, start_date, end_date').eq('workplace_id', wp).neq('id', task_id).not_.is_('start_date', 'null').not_.is_('end_date', 'null').execute()
+
+    response = (
+        supabase.table('tasks')
+        .select('project_id, start_date, end_date')
+        .eq('workplace_id', wp)
+        .neq('id', task_id)
+        .not_.is_('start_date', 'null')
+        .not_.is_('end_date', 'null')
+        .execute()
+    )
+
     colliding = []
     for row in response.data:
-        row_start = datetime.strptime(row['start_date'], '%Y-%m-%d').date()
-        row_end = datetime.strptime(row['end_date'], '%Y-%m-%d').date()
-        if not (end < row_start or start > row_end):
-            colliding.append(row['project_id'])
-    return list(set(colliding))  # Odstranění duplicit pro jistotu
+        try:
+            row_start = datetime.strptime(row['start_date'], '%Y-%m-%d').date()
+            row_end = datetime.strptime(row['end_date'], '%Y-%m-%d').date()
+            if not (end < row_start or start > row_end):
+                colliding.append(row['project_id'])
+        except Exception:
+            continue
+
+    return list(set(colliding))
+
 
 def check_collisions(task_id):
     return len(get_colliding_projects(task_id)) > 0
+
 
 def mark_all_collisions():
     response = supabase.table('tasks').select('id').not_.is_('start_date', 'null').not_.is_('end_date', 'null').execute()
     ids = [row['id'] for row in response.data]
     return {tid: check_collisions(tid) for tid in ids}
+
 
 def delete_task(task_id):
     try:
@@ -422,6 +406,7 @@ def delete_task(task_id):
     except Exception as e:
         st.error(f"Chyba při mazání úkolu: {str(e)}")
         return False
+
 
 def delete_project(project_id):
     try:
@@ -437,6 +422,7 @@ def delete_project(project_id):
         st.error(f"Chyba při mazání projektu {project_id}: {str(e)}")
         return False
 
+
 # ============================
 # USER MANAGEMENT FUNKCE
 # ============================
@@ -447,10 +433,12 @@ def get_user_role(username):
     user_data = usernames_lower.get(username.lower(), {})
     return user_data.get('role', 'viewer')
 
+
 def get_user_count():
     with open(USERS_FILE, 'r', encoding='utf-8') as f:
         config = yaml.safe_load(f)
     return len(config['credentials']['usernames'])
+
 
 def add_user(username, name, password, role):
     if get_user_count() >= 6 and role != 'admin':
@@ -468,6 +456,7 @@ def add_user(username, name, password, role):
         yaml.dump(config, f, default_flow_style=False, allow_unicode=True)
     return True, "Uživatel přidán."
 
+
 def reset_password(username, new_password='1234'):
     with open(USERS_FILE, 'r', encoding='utf-8') as f:
         config = yaml.safe_load(f)
@@ -478,6 +467,7 @@ def reset_password(username, new_password='1234'):
         yaml.dump(config, f, default_flow_style=False, allow_unicode=True)
     return True, "Heslo resetováno na 1234."
 
+
 def change_password(username, new_password):
     with open(USERS_FILE, 'r', encoding='utf-8') as f:
         config = yaml.safe_load(f)
@@ -485,6 +475,7 @@ def change_password(username, new_password):
     with open(USERS_FILE, 'w', encoding='utf-8') as f:
         yaml.dump(config, f, default_flow_style=False, allow_unicode=True)
     return True, "Heslo změněno."
+
 
 def create_users_file():
     if not os.path.exists(USERS_FILE):
@@ -508,15 +499,19 @@ def create_users_file():
         with open(USERS_FILE, 'w', encoding='utf-8') as f:
             yaml.dump(users, f, default_flow_style=False, allow_unicode=True)
 
+
 create_users_file()
+
 with open(USERS_FILE, encoding='utf-8') as file:
     config = yaml.safe_load(file)
+
 authenticator = stauth.Authenticate(
     config['credentials'],
     config['cookie']['name'],
     config['cookie']['key'],
     config['cookie']['expiry_days']
 )
+
 
 # ============================
 # HLAVNÍ APLIKACE
@@ -525,15 +520,21 @@ st.set_page_config(page_title="Plánovač Horkých komor CVŘ", page_icon=":radi
 st.title("Plánovač Horkých komor CVŘ")
 
 if not st.session_state.get('authentication_status'):
-    st.markdown("Vítejte v Plánovači Horkých komor CVŘ. Přihlaste se prosím. \n\n Pro založení nového uživatele kontaktujte petr.svrcula@cvrez.cz.")
+    st.markdown(
+        "Vítejte v Plánovači Horkých komor CVŘ. Přihlaste se prosím.\n\n"
+        "Pro založení nového uživatele kontaktujte petr.svrcula@cvrez.cz."
+    )
+
 authenticator.login(location='main')
 
 if st.session_state.get('authentication_status'):
     username = st.session_state['username']
     role = get_user_role(username)
     name = st.session_state['name']
+
     st.sidebar.success(f"Vítej, {name} ({role})!")
     authenticator.logout('Odhlásit se', location='sidebar')
+
     init_db()
     read_only = (role == 'viewer')
 
@@ -547,18 +548,22 @@ if st.session_state.get('authentication_status'):
     ]
     if role == 'admin':
         options.append("User Management")
+
     option = st.sidebar.radio("Navigace", options)
 
     if option == "Přidat projekt / úkol":
         st.header("Přidat projekt a úkol")
+
         if role == 'viewer':
             st.error("Přístup jen pro administrátory a normální uživatele.")
         else:
             col1, col2 = st.columns(2)
+
             with col1:
                 st.subheader("Přidat projekt")
                 proj_id = st.text_input("Číslo projektu (povinné)", key="new_proj_id")
                 proj_name = st.text_input("Název projektu (volitelné)", key="new_proj_name")
+
                 if st.button("Přidat projekt"):
                     if proj_id.strip():
                         try:
@@ -573,7 +578,6 @@ if st.session_state.get('authentication_status'):
                     else:
                         st.error("Zadejte číslo projektu.")
 
-            # Notifikace pro projekt – mimo sloupec
             if st.session_state.get('project_added_success', False):
                 proj_id = st.session_state['project_added_id']
                 st.success(f"Projekt {proj_id} úspěšně přidán! 🎉")
@@ -582,14 +586,11 @@ if st.session_state.get('authentication_status'):
                 if 'project_added_id' in st.session_state:
                     del st.session_state['project_added_id']
 
-            # Sloupec pro přidání úkolu – vždy viditelný
             with col2:
                 st.subheader("Přidat úkol")
                 with st.form(key="add_task_form"):
                     colA, colB = st.columns(2)
                     with colA:
-                        
-                        
                         project_choices = get_project_choices()
                         if not project_choices:
                             st.warning("Nejprve přidejte projekt.")
@@ -604,26 +605,31 @@ if st.session_state.get('authentication_status'):
                                 index=0,
                                 key="add_task_proj"
                             )
+
+                        parent_id = None
                         if project_id:
                             possible_parents = get_tasks(project_id)
                             parent_options = ["Žádný (root)"] + [
-                                f"P{project_id} - Pracoviště: {get_workplace_name(t['workplace_id'])} - Start: {yyyymmdd_to_ddmmyyyy(t['start_date']) or 'bez data'} - Poznámka: {t['notes'][:30] or 'bez poznámky'}..."
+                                f"P{project_id} - Pracoviště: {get_workplace_name(t['workplace_id'])} - "
+                                f"Start: {yyyymmdd_to_ddmmyyyy(t['start_date']) or 'bez data'} - "
+                                f"Poznámka: {t['notes'][:30] or 'bez poznámky'}..."
                                 for t in possible_parents
                             ]
                             parent_choice = st.selectbox("Nadřazený úkol (větev)", parent_options)
-                            parent_id = None
                             if parent_choice != "Žádný (root)":
                                 idx = parent_options.index(parent_choice) - 1
                                 if 0 <= idx < len(possible_parents):
                                     parent_id = possible_parents[idx]['id']
                         else:
-                            parent_id = None
-                            st.info("Vyberte projekt pro zobrazení možných nadřazených úkolů.")    
+                            st.info("Vyberte projekt pro zobrazení možných nadřazených úkolů.")
+
                         wp_names = [name for _, name in get_workplaces()]
                         wp_name = st.selectbox("Pracoviště", wp_names)
                         wp_id = next((wid for wid, name in get_workplaces() if name == wp_name), None)
+
                         hours = st.number_input("Počet hodin", min_value=1, step=1, format="%d")
                         bodies_count = st.number_input("Počet těles", min_value=1, step=1)
+
                         active_choice = st.radio(
                             "Stav těles",
                             ["Aktivní", "Neaktivní"],
@@ -637,8 +643,9 @@ if st.session_state.get('authentication_status'):
                         start_date_obj = st.date_input("Začátek (volitelné)", value=None, format="DD.MM.YYYY")
                         start_ddmmyyyy = start_date_obj.strftime('%d.%m.%Y') if start_date_obj else None
                         notes = st.text_area("Poznámka")
-                        
+
                     submitted = st.form_submit_button("Přidat úkol")
+
                     if submitted:
                         if not project_id:
                             st.error("Vyberte projekt.")
@@ -649,12 +656,12 @@ if st.session_state.get('authentication_status'):
                         elif parent_id and has_cycle(parent_id):
                             st.error("Vytvoření cyklu zakázáno.")
                         else:
-                            try:    
-# Dočasně vytvoříme úkol jen v paměti pro kontrolu kolizí
+                            try:
                                 start_yyyymmdd = ddmmyyyy_to_yyyymmdd(start_ddmmyyyy) if start_ddmmyyyy else None
                                 temp_end = calculate_end_date(start_yyyymmdd, float(hours), capacity_mode) if start_yyyymmdd else None
 
-                                # Kontrola kolizí v rámci stejného projektu → tvrdé zastavení
+                                # 1. Kontrola kolizí v rámci stejného projektu → tvrdé zastavení
+                                conflict_in_project = False
                                 if start_yyyymmdd and temp_end:
                                     existing_in_project = (
                                         supabase.table('tasks')
@@ -667,35 +674,33 @@ if st.session_state.get('authentication_status'):
                                         .data
                                     )
 
-                                    conflict_in_project = False
                                     new_start_date = datetime.strptime(start_yyyymmdd, '%Y-%m-%d').date()
                                     new_end_date = datetime.strptime(temp_end, '%Y-%m-%d').date()
 
                                     for ex in existing_in_project:
                                         ex_start = datetime.strptime(ex['start_date'], '%Y-%m-%d').date()
                                         ex_end = datetime.strptime(ex['end_date'], '%Y-%m-%d').date()
-                                        
                                         if not (new_end_date < ex_start or new_start_date > ex_end):
                                             conflict_in_project = True
                                             break
 
-                                    if conflict_in_project:
-                                        st.error("Kolize v rámci stejného projektu na tomto pracovišti. "
-                                                "Upravte existující úkol(y) a zkuste znovu.")
-                                        st.stop()  # Zastaví další zpracování formuláře
-        # Pokud projde intra-projekt kontrolou → jdeme na cross-projekt
-            # Dočasně si uložíme data do session_state pro případné potvrzení
-                                if start_yyyymmdd:
-                                    # Simulujeme kolizi (použijeme funkci, kterou už máš)
-                                    colliding_projects = get_colliding_projects_simulated(
-                                        workplace_id=wp_id,
-                                        start_date=start_yyyymmdd,
-                                        end_date=temp_end,
-                                        exclude_task_id=None  # nový úkol ještě nemá ID
+                                if conflict_in_project:
+                                    st.error(
+                                        "Kolize v rámci stejného projektu na tomto pracovišti. "
+                                        "Upravte existující úkol(y) a zkuste znovu."
                                     )
+                                else:
+                                    # 2. Kontrola cross-projektových kolizí
+                                    colliding_projects = []
+                                    if start_yyyymmdd and temp_end:
+                                        colliding_projects = get_colliding_projects_simulated(
+                                            workplace_id=wp_id,
+                                            start_date=start_yyyymmdd,
+                                            end_date=temp_end
+                                        )
 
                                     if colliding_projects:
-                                        # Kolize mezi projekty → potvrzovací dialog
+                                        # Uložení pro dialog
                                         st.session_state['pending_task_data'] = {
                                             'project_id': project_id,
                                             'workplace_id': wp_id,
@@ -705,13 +710,13 @@ if st.session_state.get('authentication_status'):
                                             'notes': notes,
                                             'bodies_count': int(bodies_count),
                                             'is_active': is_active,
-                                            'parent_id': parent_id,
-                                            'colliding_projects': colliding_projects
+                                            'parent_id': parent_id
                                         }
+                                        st.session_state['colliding_projects'] = colliding_projects
                                         st.session_state['show_collision_confirm'] = True
                                         st.rerun()
                                     else:
-                                        # Žádná kolize → přidáme normálně
+                                        # Přímé přidání bez kolize
                                         task_id = add_task(
                                             project_id=project_id,
                                             workplace_id=wp_id,
@@ -723,55 +728,57 @@ if st.session_state.get('authentication_status'):
                                             is_active=is_active,
                                             parent_id=parent_id
                                         )
-                                        st.session_state['task_added_success'] = True
-                                        # ... zbytek notifikací ...
-                                        st.rerun()
+                                        if task_id:
+                                            st.session_state['task_added_success'] = True
+                                            st.session_state['task_added_details'] = {
+                                                'project': project_id,
+                                                'workplace': wp_name,
+                                                'hours': hours,
+                                                'mode': capacity_mode,
+                                                'start': start_ddmmyyyy or 'automaticky'
+                                            }
+                                            if parent_id:
+                                                children_count = len(get_children(parent_id))
+                                                if children_count > 1:
+                                                    st.session_state['fork_warning'] = children_count
+                                            st.rerun()
 
                             except Exception as e:
-                                st.error(f"Chyba při kontrole/přidávání úkolu: {e}")            
-                    # ----------------- Potvrzovací dialog (mimo form) -----------------
-                    if st.session_state.get('show_collision_confirm', False):
-                        pending = st.session_state['pending_task_data']
-                        colliding_str = ', '.join(map(str, pending['colliding_projects']))
+                                st.error(f"Chyba při kontrole/přidávání úkolu: {e}")
 
-                        st.warning(f"**Pozor – kolize mezi projekty!**\n\n"
-                                f"Tento nový úkol bude kolidovat s projekty: **{colliding_str}** "
-                                f"na pracovišti {get_workplace_name(pending['workplace_id'])}.\n\n"
-                                "Opravdu chcete úkol přidat přesto?")
+            # Potvrzovací dialog pro cross-projektovou kolizi
+            if st.session_state.get('show_collision_confirm', False):
+                pending = st.session_state['pending_task_data']
+                colliding_str = ', '.join(map(str, st.session_state.get('colliding_projects', [])))
 
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            if st.button("Ano, přidat přesto", type="primary"):
-                                # Teď teprve přidáme úkol
-                                task_id = add_task(
-                                    project_id=pending['project_id'],
-                                    workplace_id=pending['workplace_id'],
-                                    hours=pending['hours'],
-                                    mode=pending['mode'],
-                                    start_ddmmyyyy=pending['start_ddmmyyyy'],
-                                    notes=pending['notes'],
-                                    bodies_count=pending['bodies_count'],
-                                    is_active=pending['is_active'],
-                                    parent_id=pending['parent_id']
-                                )
-                                if task_id:
-                                    st.success("Úkol přidán přesto (s kolizí).")
-                                    st.session_state['task_added_success'] = True
-                                    # ... notifikace ...
-                                # Vyčistíme stav
-                                del st.session_state['pending_task_data']
-                                del st.session_state['show_collision_confirm']
-                                st.rerun()
+                st.warning(
+                    f"**Pozor – kolize mezi projekty!**\n\n"
+                    f"Tento nový úkol bude kolidovat s projekty: **{colliding_str}**\n"
+                    f"na pracovišti {get_workplace_name(pending['workplace_id'])}.\n\n"
+                    "Opravdu chcete úkol přidat přesto?"
+                )
 
-                        with col2:
-                            if st.button("Ne, zrušit"):
-                                st.info("Přidání úkolu zrušeno.")
-                                del st.session_state['pending_task_data']
-                                del st.session_state['show_collision_confirm']
-                                st.rerun()                    
-                    
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("Ano, přidat přesto", type="primary"):
+                        task_id = add_task(**pending)
+                        if task_id:
+                            st.success("Úkol přidán přesto (s kolizí).")
+                            st.session_state['task_added_success'] = True
+                        del st.session_state['pending_task_data']
+                        del st.session_state['colliding_projects']
+                        del st.session_state['show_collision_confirm']
+                        st.rerun()
 
-            # Notifikace pro úkol – mimo sloupce a form
+                with col2:
+                    if st.button("Ne, zrušit"):
+                        st.info("Přidání úkolu zrušeno.")
+                        del st.session_state['pending_task_data']
+                        del st.session_state['colliding_projects']
+                        del st.session_state['show_collision_confirm']
+                        st.rerun()
+
+            # Notifikace pro úspěšné přidání
             if st.session_state.get('task_added_success', False):
                 details = st.session_state['task_added_details']
                 st.success(
@@ -782,7 +789,6 @@ if st.session_state.get('authentication_status'):
                     f"Režim: {details['mode']}\n"
                     f"Začátek: {details['start']}"
                 )
-                #st.balloons()
                 st.toast("Nový úkol je připraven!", icon="🎉")
                 del st.session_state['task_added_success']
                 if 'task_added_details' in st.session_state:
@@ -792,13 +798,14 @@ if st.session_state.get('authentication_status'):
                 st.warning(f"Vytvořili jste fork/split – nadřazený úkol má nyní {st.session_state['fork_warning']} potomků.")
                 del st.session_state['fork_warning']
 
+    # ──────────────────────────────────────────────────────────────
+    # Prohlížet / Upravovat úkoly
+    # ──────────────────────────────────────────────────────────────
     elif option == "Prohlížet / Upravovat úkoly":
         st.header("Prohlížet / Upravovat úkoly")
-
         if read_only:
             st.warning("V režimu prohlížení nelze provádět úpravy.")
 
-        # Výběr projektu s hezkým zobrazením
         projects = get_projects()
         if not projects:
             st.info("Nejprve přidejte alespoň jeden projekt.")
@@ -813,12 +820,10 @@ if st.session_state.get('authentication_status'):
             key="edit_proj"
         )
 
-        # Tlačítko pro rekalkulaci
         if st.button("Rekalkulovat projekt"):
             recalculate_project(selected_project)
             st.success("Projekt přepočítán.")
-            
-            # Po rekalkulaci zkontrolujeme kolize v celém projektu
+
             tasks = get_tasks(selected_project)
             collisions = mark_all_collisions()
             colliding_tasks = [tid for tid, has_coll in collisions.items() if has_coll and get_task(tid)['project_id'] == selected_project]
@@ -828,12 +833,10 @@ if st.session_state.get('authentication_status'):
                     coll_projects = get_colliding_projects(tid)
                     colliding_info.append(f"Úkol {tid}: kolize s {', '.join(coll_projects)}")
                 st.warning("Po rekalkulaci detekovány kolize:\n" + "\n".join(colliding_info))
-            
+
             st.rerun()
 
-        # Načtení úkolů – jen z vybraného projektu
         tasks = get_tasks(selected_project)
-
         if not tasks:
             st.info(f"V projektu {selected_display} zatím nejsou žádné úkoly.")
         else:
@@ -841,7 +844,7 @@ if st.session_state.get('authentication_status'):
             data = []
             for t in tasks:
                 wp_name = get_workplace_name(t['workplace_id'])
-                start_disp = yyyymmdd_to_ddmmyyyy(t['start_date'])   # teď bude "" místo "bez data"
+                start_disp = yyyymmdd_to_ddmmyyyy(t['start_date'])
                 end_disp = yyyymmdd_to_ddmmyyyy(t['end_date'])
                 coll_text = ""
                 if collisions.get(t['id'], False):
@@ -859,7 +862,6 @@ if st.session_state.get('authentication_status'):
                 else:
                     status_display = "Pending"
 
-                # Nový sloupec: Parent úkol
                 parent_id = get_parent(t['id'])
                 if parent_id:
                     parent_task = get_task(parent_id)
@@ -873,15 +875,14 @@ if st.session_state.get('authentication_status'):
                 else:
                     parent_desc = "— (root)"
 
-                # Detailní popis pro tabulku
                 task_desc = (
-                    f"{wp_name} – {start_disp} – {t['hours']}h – "
+                    f"P{selected_project} – {wp_name} – {start_disp} – {t['hours']}h – "
                     f"{status_icon}{status_display} – {t['notes'][:40] or 'bez poznámky'}..."
                 )
 
                 data.append({
                     "ID": t['id'],
-                    "Parent úkol": parent_desc,           # ← NOVÝ SLOUPEC
+                    "Parent úkol": parent_desc,
                     "Popis": task_desc,
                     "Pracoviště": wp_name,
                     "Hodiny": t['hours'],
@@ -896,15 +897,13 @@ if st.session_state.get('authentication_status'):
                 })
 
             df = pd.DataFrame(data)
-            # Nejprve definujeme CSS pro konfliktní řádky (můžeš přidat kamkoli před AgGrid, ideálně na začátek sekce)
+
             custom_css = {
                 ".conflict-row": {
-                    "background-color": "#ffcccc !important",  # světle červená
-                    # volitelně: "border-left": "4px solid #ff0000 !important",
+                    "background-color": "#ffcccc !important",
                 }
             }
 
-            # Pak AgGrid s rowClassRules (bez nebezpečného JS kódu)
             grid_response = AgGrid(
                 df,
                 height=500,
@@ -925,8 +924,6 @@ if st.session_state.get('authentication_status'):
                         {"field": "Aktivní", "width": 100}
                     ],
                     "defaultColDef": {"resizable": True, "sortable": True, "filter": True},
-                    
-                    # Toto je bezpečný způsob – pravidlo jako string (ne funkce!)
                     "rowClassRules": {
                         "conflict-row": "params.data && params.data['Kolize'] && params.data['Kolize'].trim() !== ''"
                     }
@@ -935,12 +932,10 @@ if st.session_state.get('authentication_status'):
                 data_return_mode=DataReturnMode.AS_INPUT,
                 fit_columns_on_grid_load=True,
                 theme="streamlit",
-                custom_css=custom_css,          # ← zde přidáme náš styl
-                allow_unsafe_jscode=False       # ← bezpečnější, ideálně vypnuto
+                custom_css=custom_css,
+                allow_unsafe_jscode=False
             )
-            
 
-            # Zbytek kódu (změna stavu, mazání) zůstává stejný jako v předchozí verzi
             updated_df = grid_response['data']
             changes_made = False
 
@@ -948,15 +943,13 @@ if st.session_state.get('authentication_status'):
                 task_id = row['ID']
                 new_start_raw = row['Začátek']
                 new_start_str = str(new_start_raw).strip() if pd.notna(new_start_raw) else ""
-                
+
                 task = get_task(task_id)
                 original_start = yyyymmdd_to_ddmmyyyy(task['start_date']) if task['start_date'] else ""
-                
-                # Pokud se nic nezměnilo → přeskočíme
+
                 if new_start_str == original_start:
                     continue
-                
-                # 1. Uživatel vymazal pole (prázdné) → chceme nastavit start_date na None
+
                 if not new_start_str:
                     try:
                         update_task(task_id, 'start_date', None)
@@ -965,13 +958,11 @@ if st.session_state.get('authentication_status'):
                     except Exception as e:
                         st.error(f"Chyba při vymazání data u úkolu {task_id}: {e}")
                     continue
-                
-                # 2. Uživatel něco napsal → musíme ověřit formát
+
                 if not validate_ddmmyyyy(new_start_str):
                     st.error(f"Neplatné datum u úkolu {task_id}: '{new_start_str}'. Použijte např. 1.1.2026 nebo 15.03.2025")
                     continue
-                
-                # 3. Platný formát → uložíme
+
                 try:
                     update_task(task_id, 'start_date', new_start_str)
                     recalculate_from_task(task_id)
@@ -981,8 +972,6 @@ if st.session_state.get('authentication_status'):
 
             if changes_made:
                 st.success("Změny uloženy a termíny přepočítány.")
-                # Volitelně: přepočítat celý projekt pro jistotu
-                # recalculate_project(selected_project)
                 st.rerun()
 
             if tasks:
@@ -992,7 +981,7 @@ if st.session_state.get('authentication_status'):
                     wp_name = get_workplace_name(t['workplace_id'])
                     start = yyyymmdd_to_ddmmyyyy(t['start_date']) or 'bez data'
                     status_icon = "✅ " if t['status'] == 'done' else "❌ " if t['status'] == 'canceled' else ""
-                    desc = f"{wp_name} – {start} – {t['hours']}h – {status_icon}{t['status']} – {t['notes'][:40] or 'bez poznámky'}..."
+                    desc = f"P{selected_project} – {wp_name} – {start} – {t['hours']}h – {status_icon}{t['status']} – {t['notes'][:40] or 'bez poznámky'}..."
                     task_options.append(desc)
 
                 selected_task_display = st.selectbox("Vyberte úkol", task_options, key="status_change_order")
@@ -1032,6 +1021,13 @@ if st.session_state.get('authentication_status'):
                             else:
                                 st.error("Chyba při mazání.")
 
+    # ──────────────────────────────────────────────────────────────
+    # Zbývající sekce (HMG měsíční, HMG roční, Správa pracovišť, Změnit heslo, User Management)
+    # ──────────────────────────────────────────────────────────────
+    # ... (zde vlož zbytek svého kódu pro tyto sekce – jsou v pořádku, jen je potřeba správně odsadit)
+    # Pokud chceš, pošli mi ty části samostatně a já je opravím a přidám do celku.
+
+    # Příklad pro HMG měsíční (pokračování):
     elif option == "Správa pracovišť":
         if role != 'admin':
             st.error("Přístup jen pro administrátory.")
@@ -1364,6 +1360,7 @@ elif st.session_state.get('authentication_status') is False:
 elif st.session_state.get('authentication_status') is None:
     st.warning("Přihlaste se prosím")
 
+# Footer
 if st.session_state.get('authentication_status'):
     st.sidebar.markdown("---")
     st.sidebar.markdown("Plánovač Horkých komor v1.1")
