@@ -468,7 +468,7 @@ if st.session_state.get('authentication_status'):
                         if project_id:
                             possible_parents = get_tasks(project_id)
                             parent_options = ["Žádný (root)"] + [
-                                f"P{project_id}-{yyyymmdd_to_ddmmyyyy(t['start_date']) or 'bez data'} - {t['notes'][:30]}..." 
+                                f"{project_id} - Pracoviště: {get_workplace_name(t['workplace_id'])} - Start: {yyyymmdd_to_ddmmyyyy(t['start_date']) or 'bez data'} - Poznámka: {t['notes'][:30] or 'bez poznámky'}..."
                                 for t in possible_parents
                             ]
                             parent_choice = st.selectbox("Nadřazený úkol (větev)", parent_options)
