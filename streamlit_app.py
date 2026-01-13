@@ -427,6 +427,7 @@ if st.session_state.get('authentication_status'):
             st.error("Přístup jen pro administrátory a normální uživatele.")
         else:
             col1, col2 = st.columns(2)
+
             with col1:
                 st.subheader("Přidat projekt")
                 proj_id = st.text_input("Číslo projektu (povinné)", key="new_proj_id")
@@ -446,19 +447,19 @@ if st.session_state.get('authentication_status'):
                     else:
                         st.error("Zadejte číslo projektu.")
 
-# Zobrazení notifikace MIMO button (po rerun)
-if st.session_state.get('project_added_success', False):
-    proj_id = st.session_state['project_added_id']
-    st.success(f"Projekt {proj_id} úspěšně přidán! 🎉")
-    st.balloons()          # Balónky pro radost
-    #st.toast("Nový projekt je připraven!", icon="🚀")
+            # Zobrazení notifikace pro projekt (mimo button)
+            if st.session_state.get('project_added_success', False):
+                proj_id = st.session_state['project_added_id']
+                st.success(f"Projekt {proj_id} úspěšně přidán! 🎉")
+                st.confetti()
+                st.balloons()
+                #st.toast("Nový projekt je připraven!", icon="🚀")
+                del st.session_state['project_added_success']
+                if 'project_added_id' in st.session_state:
+                    del st.session_state['project_added_id']
 
-    # Vyčistíme session_state, aby se notifikace nezobrazovala stále
-    del st.session_state['project_added_success']
-    if 'project_added_id' in st.session_state:
-        del st.session_state['project_added_id']
-
-with col2:
+            # Sloupec pro přidání úkolu – ZDE, mimo podmínku!
+            with col2:
                 st.subheader("Přidat úkol")
                 with st.form(key="add_task_form"):
                     colA, colB = st.columns(2)
@@ -468,23 +469,40 @@ with col2:
                             st.warning("Nejprve přidejte projekt.")
                             project_id = None
                         else:
-                            # Původní get_project_choices vrací list stringů (jen id)
-                            # Proto si vytvoříme vlastní list tuplů pro lepší zobrazení
-                            projects = get_projects()  # vrací [(id, name), ...]
+                            projects = get_projects()
                             display_options = [(f"{pid} – {name or 'bez názvu'}", pid) for pid, name in projects]
                             selected_display, project_id = st.selectbox(
                                 "Projekt",
                                 options=display_options,
-                                format_func=lambda x: x[0],  # zobrazí "ID – Název"
-                                index=0,                      # defaultně první
+                                format_func=lambda x: x[0],
+                                index=0,
                                 key="add_task_proj"
                             )
+                        wp_names = [name for _, name in get_workplaces()]
+                        wp_name = st.selectbox("Pracoviště", wp_names)
+                        wp_id = next((wid for wid, name in get_workplaces() if name == wp_name), None)
+                        hours = st.number_input("Počet hodin", min_value=0.5, step=0.5, format="%.1f")
 
-                        # Výběr parenta (single parent – jen jeden)
+                    with colB:
+                        capacity_mode = st.radio("Režim kapacity", ['7.5', '24'], horizontal=True)
+                        start_date_obj = st.date_input("Začátek (volitelné)", value=None, format="DD.MM.YYYY")
+                        start_ddmmyyyy = start_date_obj.strftime('%d.%m.%Y') if start_date_obj else None
+                        notes = st.text_area("Poznámka")
+                        bodies_count = st.number_input("Počet těles", min_value=1, step=1)
+
+                        active_choice = st.radio(
+                            "Stav těles",
+                            ["Aktivní", "Neaktivní"],
+                            index=0,
+                            horizontal=True
+                        )
+                        is_active = (active_choice == "Aktivní")
+
+                        # Výběr parenta
                         if project_id:
                             possible_parents = get_tasks(project_id)
                             parent_options = ["Žádný (root)"] + [
-                                f"{project_id} - Pracoviště: {get_workplace_name(t['workplace_id'])} - Start: {yyyymmdd_to_ddmmyyyy(t['start_date']) or 'bez data'} - Poznámka: {t['notes'][:30] or 'bez poznámky'}..."
+                                f"P{project_id} - Pracoviště: {get_workplace_name(t['workplace_id'])} - Start: {yyyymmdd_to_ddmmyyyy(t['start_date']) or 'bez data'} - Poznámka: {t['notes'][:30] or 'bez poznámky'}..."
                                 for t in possible_parents
                             ]
                             parent_choice = st.selectbox("Nadřazený úkol (větev)", parent_options)
@@ -496,28 +514,6 @@ with col2:
                         else:
                             parent_id = None
                             st.info("Vyberte projekt pro zobrazení možných nadřazených úkolů.")
-
-                        wp_names = [name for _, name in get_workplaces()]
-                        wp_name = st.selectbox("Pracoviště", wp_names)
-                        wp_id = next((wid for wid, name in get_workplaces() if name == wp_name), None)
-                        hours = st.number_input("Počet hodin", min_value=0.5, step=0.5, format="%.1f")
-                        bodies_count = st.number_input("Počet těles", min_value=1, step=1)
-
-                        # Radio button pro aktivní/neaktivní tělesa – defaultně Aktivní
-                        active_choice = st.radio(
-                            "Stav těles",
-                            ["Aktivní", "Neaktivní"],
-                            index=0,  # 0 = Aktivní jako default
-                            horizontal=True
-                        )
-                        is_active = (active_choice == "Aktivní")
-
-                    with colB:
-                        capacity_mode = st.radio("Režim kapacity", ['7.5', '24'], horizontal=True)
-                        start_date_obj = st.date_input("Začátek (volitelné)", value=None, format="DD.MM.YYYY")
-                        start_ddmmyyyy = start_date_obj.strftime('%d.%m.%Y') if start_date_obj else None
-                        notes = st.text_area("Poznámka")
-                        
 
                     submitted = st.form_submit_button("Přidat úkol")
                     if submitted:
@@ -543,7 +539,7 @@ with col2:
                                     parent_id=parent_id
                                 )
 
-                                # Uložíme úspěch do session_state (přetrvá rerun)
+                                # Uložíme úspěch do session_state pro úkol
                                 st.session_state['task_added_success'] = True
                                 st.session_state['task_added_details'] = {
                                     'project': project_id,
@@ -553,44 +549,37 @@ with col2:
                                     'start': start_ddmmyyyy or 'automaticky'
                                 }
 
-                                # Kontrola fork/split
+                                # Fork/split varování
                                 if parent_id:
                                     children_count = len(get_children(parent_id))
                                     if children_count > 1:
                                         st.session_state['fork_warning'] = children_count
 
-                                st.rerun()  # Rerun ihned po úspěchu
+                                st.rerun()
 
                             except Exception as e:
                                 st.error(f"Chyba při přidávání úkolu: {e}")
 
-# Zobrazení notifikace MIMO form (po rerun)
-if st.session_state.get('task_added_success', False):
-    details = st.session_state['task_added_details']
-    st.success(
-        f"Úkol úspěšně přidán! ✅\n\n"
-        f"Projekt: {details['project']}\n"
-        f"Pracoviště: {details['workplace']}\n"
-        f"Hodiny: {details['hours']}\n"
-        f"Režim: {details['mode']}\n"
-        f"Začátek: {details['start']}"
-    )
-    #st.balloons()  # Balónky pro radost!
+            # Zobrazení notifikace pro úkol (mimo form a sloupec)
+            if st.session_state.get('task_added_success', False):
+                details = st.session_state['task_added_details']
+                st.success(
+                    f"Úkol úspěšně přidán! ✅\n\n"
+                    f"Projekt: {details['project']}\n"
+                    f"Pracoviště: {details['workplace']}\n"
+                    f"Hodiny: {details['hours']}\n"
+                    f"Režim: {details['mode']}\n"
+                    f"Začátek: {details['start']}"
+                )
+                st.balloons()
+                st.toast("Nový úkol je připraven!", icon="🎉")
+                del st.session_state['task_added_success']
+                if 'task_added_details' in st.session_state:
+                    del st.session_state['task_added_details']
 
-    # Volitelně toast
-    st.toast("Nový úkol je připraven!", icon="🎉")
-
-    # Vyčistíme session_state po zobrazení (aby se nezobrazovala stále)
-    del st.session_state['task_added_success']
-    if 'task_added_details' in st.session_state:
-        del st.session_state['task_added_details']
-
-# Varování na fork/split (pokud existuje)
-if 'fork_warning' in st.session_state:
-    st.warning(
-        f"Vytvořili jste fork/split – nadřazený úkol má nyní {st.session_state['fork_warning']} potomků."
-    )
-    del st.session_state['fork_warning']
+            if 'fork_warning' in st.session_state:
+                st.warning(f"Vytvořili jste fork/split – nadřazený úkol má nyní {st.session_state['fork_warning']} potomků.")
+                del st.session_state['fork_warning']
 
 # Kolize kontrola (zachováno)
 if 'task_id_for_collision' in locals():  # pokud máš task_id z try
