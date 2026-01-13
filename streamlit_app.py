@@ -633,25 +633,26 @@ if st.session_state.get('authentication_status'):
                                         .eq('workplace_id', wp_id)
                                         .not_.is_('start_date', 'null')
                                         .not_.is_('end_date', 'null')
-                                        .neq('id', -1)   # dummy, aby query nebyla prázdná při chybě
                                         .execute()
                                         .data
                                     )
 
                                     conflict_in_project = False
+                                    new_start_date = datetime.strptime(start_yyyymmdd, '%Y-%m-%d').date()
+                                    new_end_date = datetime.strptime(temp_end, '%Y-%m-%d').date()
+
                                     for ex in existing_in_project:
                                         ex_start = datetime.strptime(ex['start_date'], '%Y-%m-%d').date()
                                         ex_end = datetime.strptime(ex['end_date'], '%Y-%m-%d').date()
-                                        new_start = datetime.strptime(start_yyyymmdd, '%Y-%m-%d').date()
-                                        new_end = datetime.strptime(temp_end, '%Y-%m-%d').date()
-                                        if not (new_end < ex_start or new_start > ex_end):
+                                        
+                                        if not (new_end_date < ex_start or new_start_date > ex_end):
                                             conflict_in_project = True
                                             break
 
                                     if conflict_in_project:
                                         st.error("Kolize v rámci stejného projektu na tomto pracovišti. "
                                                 "Upravte existující úkol(y) a zkuste znovu.")
-                                        st.stop()  # zastavíme další zpracování
+                                        st.stop()  # Zastaví další zpracování formuláře
         # Pokud projde intra-projekt kontrolou → jdeme na cross-projekt
             # Dočasně si uložíme data do session_state pro případné potvrzení
                                 if start_yyyymmdd:
