@@ -798,10 +798,17 @@ if st.session_state.get('authentication_status'):
                         {"field": "Aktivní", "width": 100}
                     ],
                     "defaultColDef": {"resizable": True, "sortable": True, "filter": True},
-                    "getRowStyle": {  # Přidáno pro barevné řádky
-                        "params": {
-                            "style": "params.data.Kolize !== '' ? {'backgroundColor': '#ffcccc'} : {};"
-                        }
+                    
+                    # Správný způsob definice getRowStyle (Python callable)
+                    "getRowStyle": {
+                        "function": """
+                            function(params) {
+                                if (params.data && params.data.Kolize && params.data.Kolize.trim() !== '') {
+                                    return { 'backgroundColor': '#ffcccc' };  // světle červená
+                                }
+                                return null;
+                            }
+                        """
                     }
                 },
                 update_mode=GridUpdateMode.VALUE_CHANGED,
