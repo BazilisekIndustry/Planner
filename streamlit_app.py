@@ -451,7 +451,17 @@ if st.session_state.get('authentication_status'):
                             st.warning("Nejprve přidejte projekt.")
                             project_id = None
                         else:
-                            project_id = st.selectbox("Projekt", project_choices, key="add_task_proj")
+                            # Původní get_project_choices vrací list stringů (jen id)
+                            # Proto si vytvoříme vlastní list tuplů pro lepší zobrazení
+                            projects = get_projects()  # vrací [(id, name), ...]
+                            display_options = [(f"{pid} – {name or 'bez názvu'}", pid) for pid, name in projects]
+                            selected_display, project_id = st.selectbox(
+                                "Projekt",
+                                options=display_options,
+                                format_func=lambda x: x[0],  # zobrazí "ID – Název"
+                                index=0,                      # defaultně první
+                                key="add_task_proj"
+                            )
 
                         # Výběr parenta (single parent – jen jeden)
                         if project_id:
@@ -469,7 +479,7 @@ if st.session_state.get('authentication_status'):
                         else:
                             parent_id = None
                             st.info("Vyberte projekt pro zobrazení možných nadřazených úkolů.")
-                            
+
                         wp_names = [name for _, name in get_workplaces()]
                         wp_name = st.selectbox("Pracoviště", wp_names)
                         wp_id = next((wid for wid, name in get_workplaces() if name == wp_name), None)
@@ -548,10 +558,19 @@ if st.session_state.get('authentication_status'):
         if read_only:
             st.warning("V režimu prohlížení nelze provádět úpravy.")
         project_choices = get_project_choices()
+        display_options = [(f"{pid} – {name or 'bez názvu'}", pid) for pid, name in projects]
+
         if not project_choices:
             st.info("Nejprve přidejte projekt.")
             st.stop()
-        selected_project = st.selectbox("Vyberte projekt", project_choices, key="edit_proj")
+        selected_display, selected_project = st.selectbox(
+            "Vyberte projekt",
+            options=display_options,
+            format_func=lambda x: x[0],  # zobrazí "ID – Název"
+            index=0,
+            key="edit_proj"
+        )
+
         if st.button("Rekalkulovat projekt"):
             recalculate_project(selected_project)
             st.success("Projekt přepočítán.")
