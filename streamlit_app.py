@@ -761,10 +761,35 @@ if st.session_state.get('authentication_status'):
                 col1, col2 = st.columns(2)
                 with col1:
                     if st.button("Ano, přidat přesto", type="primary"):
-                        task_id = add_task(**pending)
+                        task_id = add_task(
+                            project_id=pending['project_id'],
+                            workplace_id=pending['workplace_id'],
+                            hours=pending['hours'],
+                            mode=pending['mode'],
+                            start_ddmmyyyy=pending['start_ddmmyyyy'],
+                            notes=pending['notes'],
+                            bodies_count=pending['bodies_count'],
+                            is_active=pending['is_active'],
+                            parent_id=pending['parent_id']
+                        )
                         if task_id:
                             st.success("Úkol přidán přesto (s kolizí).")
+                            # ← KLÍČOVÁ OPRAVA – nastavíme i detaily pro notifikaci
                             st.session_state['task_added_success'] = True
+                            st.session_state['task_added_details'] = {
+                                'project': pending['project_id'],
+                                'workplace': get_workplace_name(pending['workplace_id']),
+                                'hours': pending['hours'],
+                                'mode': pending['mode'],
+                                'start': pending['start_ddmmyyyy'] or 'automaticky'
+                            }
+                            # Volitelně fork warning
+                            if pending['parent_id']:
+                                children_count = len(get_children(pending['parent_id']))
+                                if children_count > 1:
+                                    st.session_state['fork_warning'] = children_count
+
+                        # Vyčistíme stav
                         del st.session_state['pending_task_data']
                         del st.session_state['colliding_projects']
                         del st.session_state['show_collision_confirm']
