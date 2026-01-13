@@ -433,16 +433,32 @@ if st.session_state.get('authentication_status'):
                 proj_name = st.text_input("Název projektu (volitelné)", key="new_proj_name")
                 if st.button("Přidat projekt"):
                     if proj_id.strip():
-                        if add_project(proj_id.strip(), proj_name.strip()):
-                            st.success(f"Projekt {proj_id} přidán!")
-                            st.balloons()
-                            st.rerun()
-                        else:
-                            st.error("Projekt již existuje nebo chyba při vkládání.")
+                        try:
+                            if add_project(proj_id.strip(), proj_name.strip()):
+                                # Uložíme úspěch do session_state
+                                st.session_state['project_added_success'] = True
+                                st.session_state['project_added_id'] = proj_id.strip()
+                                st.rerun()  # Rerun ihned
+                            else:
+                                st.error("Projekt již existuje nebo chyba při vkládání.")
+                        except Exception as e:
+                            st.error(f"Chyba při přidávání projektu: {e}")
                     else:
                         st.error("Zadejte číslo projektu.")
 
-            with col2:
+# Zobrazení notifikace MIMO button (po rerun)
+if st.session_state.get('project_added_success', False):
+    proj_id = st.session_state['project_added_id']
+    st.success(f"Projekt {proj_id} úspěšně přidán! 🎉")
+    st.balloons()          # Balónky pro radost
+    st.toast("Nový projekt je připraven!", icon="🚀")
+
+    # Vyčistíme session_state, aby se notifikace nezobrazovala stále
+    del st.session_state['project_added_success']
+    if 'project_added_id' in st.session_state:
+        del st.session_state['project_added_id']
+
+        with col2:
                 st.subheader("Přidat úkol")
                 with st.form(key="add_task_form"):
                     colA, colB = st.columns(2)
