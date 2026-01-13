@@ -475,6 +475,21 @@ if st.session_state.get('authentication_status'):
                                 index=0,
                                 key="add_task_proj"
                             )
+                        if project_id:
+                            possible_parents = get_tasks(project_id)
+                            parent_options = ["Žádný (root)"] + [
+                                f"P{project_id} - Pracoviště: {get_workplace_name(t['workplace_id'])} - Start: {yyyymmdd_to_ddmmyyyy(t['start_date']) or 'bez data'} - Poznámka: {t['notes'][:30] or 'bez poznámky'}..."
+                                for t in possible_parents
+                            ]
+                            parent_choice = st.selectbox("Nadřazený úkol (větev)", parent_options)
+                            parent_id = None
+                            if parent_choice != "Žádný (root)":
+                                idx = parent_options.index(parent_choice) - 1
+                                if 0 <= idx < len(possible_parents):
+                                    parent_id = possible_parents[idx]['id']
+                        else:
+                            parent_id = None
+                            st.info("Vyberte projekt pro zobrazení možných nadřazených úkolů.")    
                         wp_names = [name for _, name in get_workplaces()]
                         wp_name = st.selectbox("Pracoviště", wp_names)
                         wp_id = next((wid for wid, name in get_workplaces() if name == wp_name), None)
@@ -494,21 +509,7 @@ if st.session_state.get('authentication_status'):
                         start_ddmmyyyy = start_date_obj.strftime('%d.%m.%Y') if start_date_obj else None
                         notes = st.text_area("Poznámka")
                         
-                        if project_id:
-                            possible_parents = get_tasks(project_id)
-                            parent_options = ["Žádný (root)"] + [
-                                f"P{project_id} - Pracoviště: {get_workplace_name(t['workplace_id'])} - Start: {yyyymmdd_to_ddmmyyyy(t['start_date']) or 'bez data'} - Poznámka: {t['notes'][:30] or 'bez poznámky'}..."
-                                for t in possible_parents
-                            ]
-                            parent_choice = st.selectbox("Nadřazený úkol (větev)", parent_options)
-                            parent_id = None
-                            if parent_choice != "Žádný (root)":
-                                idx = parent_options.index(parent_choice) - 1
-                                if 0 <= idx < len(possible_parents):
-                                    parent_id = possible_parents[idx]['id']
-                        else:
-                            parent_id = None
-                            st.info("Vyberte projekt pro zobrazení možných nadřazených úkolů.")
+                        
 
                     submitted = st.form_submit_button("Přidat úkol")
                     if submitted:
