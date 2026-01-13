@@ -459,6 +459,22 @@ if st.session_state.get('authentication_status'):
                 with st.form(key="add_task_form"):
                     colA, colB = st.columns(2)
                     with colA:
+                        if project_id:
+                            possible_parents = get_tasks(project_id)
+                            parent_options = ["Žádný (root)"] + [
+                                f"P{project_id} - Pracoviště: {get_workplace_name(t['workplace_id'])} - Start: {yyyymmdd_to_ddmmyyyy(t['start_date']) or 'bez data'} - Poznámka: {t['notes'][:30] or 'bez poznámky'}..."
+                                for t in possible_parents
+                            ]
+                            parent_choice = st.selectbox("Nadřazený úkol (větev)", parent_options)
+                            parent_id = None
+                            if parent_choice != "Žádný (root)":
+                                idx = parent_options.index(parent_choice) - 1
+                                if 0 <= idx < len(possible_parents):
+                                    parent_id = possible_parents[idx]['id']
+                        else:
+                            parent_id = None
+                            st.info("Vyberte projekt pro zobrazení možných nadřazených úkolů.")
+                        
                         project_choices = get_project_choices()
                         if not project_choices:
                             st.warning("Nejprve přidejte projekt.")
@@ -476,13 +492,7 @@ if st.session_state.get('authentication_status'):
                         wp_names = [name for _, name in get_workplaces()]
                         wp_name = st.selectbox("Pracoviště", wp_names)
                         wp_id = next((wid for wid, name in get_workplaces() if name == wp_name), None)
-                        hours = st.number_input("Počet hodin", min_value=0.5, step=0.5, format="%.1f")
-
-                    with colB:
-                        capacity_mode = st.radio("Režim kapacity", ['7.5', '24'], horizontal=True)
-                        start_date_obj = st.date_input("Začátek (volitelné)", value=None, format="DD.MM.YYYY")
-                        start_ddmmyyyy = start_date_obj.strftime('%d.%m.%Y') if start_date_obj else None
-                        notes = st.text_area("Poznámka")
+                        hours = st.number_input("Počet hodin", min_value=1, step=1, format="%d")
                         bodies_count = st.number_input("Počet těles", min_value=1, step=1)
                         active_choice = st.radio(
                             "Stav těles",
@@ -491,21 +501,14 @@ if st.session_state.get('authentication_status'):
                             horizontal=True
                         )
                         is_active = (active_choice == "Aktivní")
-                        if project_id:
-                            possible_parents = get_tasks(project_id)
-                            parent_options = ["Žádný (root)"] + [
-                                f"P{project_id} - Pracoviště: {get_workplace_name(t['workplace_id'])} - Start: {yyyymmdd_to_ddmmyyyy(t['start_date']) or 'bez data'} - Poznámka: {t['notes'][:30] or 'bez poznámky'}..."
-                                for t in possible_parents
-                            ]
-                            parent_choice = st.selectbox("Nadřazený úkol (větev)", parent_options)
-                            parent_id = None
-                            if parent_choice != "Žádný (root)":
-                                idx = parent_options.index(parent_choice) - 1
-                                if 0 <= idx < len(possible_parents):
-                                    parent_id = possible_parents[idx]['id']
-                        else:
-                            parent_id = None
-                            st.info("Vyberte projekt pro zobrazení možných nadřazených úkolů.")
+
+                    with colB:
+                        capacity_mode = st.radio("Režim kapacity", ['7.5', '24'], horizontal=True)
+                        start_date_obj = st.date_input("Začátek (volitelné)", value=None, format="DD.MM.YYYY")
+                        start_ddmmyyyy = start_date_obj.strftime('%d.%m.%Y') if start_date_obj else None
+                        notes = st.text_area("Poznámka")
+                        
+                        
 
                     submitted = st.form_submit_button("Přidat úkol")
                     if submitted:
