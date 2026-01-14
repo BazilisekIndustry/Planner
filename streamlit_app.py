@@ -518,7 +518,23 @@ def change_password(username, new_password):
 if st.session_state.get('authentication_status'):
     username = st.session_state['username']
     name = st.session_state['name']
-    role = authenticator.credentials["usernames"][username].get('role', 'viewer')
+
+    # Role získáme z uložených dat v session_state (knihovna je tam má po loginu)
+    # Bezpečnější než přístup k interním atributům
+    role = st.session_state.get('role', 'viewer')  # fallback na viewer
+
+    # Pokud role není v session_state, můžeme ji jednorázově načíst z DB
+    if role == 'viewer' and 'role' not in st.session_state:
+        try:
+            user_data = supabase.table('app_users')\
+                        .select('role')\
+                        .eq('username', username)\
+                        .execute().data
+            if user_data:
+                role = user_data[0]['role']
+                st.session_state['role'] = role  # uložíme pro příště
+        except:
+            pass  # pokud selže → zůstane viewer
 
     st.sidebar.success(f"Vítej, {name} ({role})!")
     authenticator.logout('Odhlásit se', location='sidebar')
@@ -1363,6 +1379,12 @@ if st.session_state.get('authentication_status'):
                     combined_columns.append(("% využití", month))
             combined = combined[combined_columns]
             st.dataframe(combined, width='stretch')
+
+elif st.session_state.authentication_status is False:
+    st.error("Nesprávné přihlašovací údaje")
+
+elif st.session_state.authentication_status is None:
+    st.warning("Přihlaste se prosím")
 
 # Footer
 if st.session_state.get('authentication_status'):
