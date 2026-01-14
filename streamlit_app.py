@@ -1,5 +1,5 @@
 import streamlit as st
-import streamlit_authenticator as stauth
+from streamlit_authenticator import Authenticate
 import yaml
 import os
 from datetime import datetime, timedelta, date
@@ -15,6 +15,7 @@ from supabase import create_client
 import pandas as pd
 from st_aggrid import AgGrid, GridUpdateMode, DataReturnMode
 import plotly.express as px
+from streamlit_authenticator.utilities.hasher import Hasher
 
 # ============================
 # KONFIGURACE
@@ -24,6 +25,52 @@ SUPABASE_URL = st.secrets["supabase_url"]
 SUPABASE_KEY = st.secrets["supabase_key"]
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+@st.cache_data(ttl=300, show_spinner="Načítám uživatele z databáze...")  # 5 minut cache
+def load_users_from_db():
+    try:
+        response = supabase.table('app_users')\
+                   .select("username, name, password_hash, role, email")\
+                   .execute()
+        
+        if not response.data:
+            st.warning("V databázi nejsou žádní uživatelé!")
+            return {"usernames": {}}
+            
+        users_dict = {}
+        for row in response.data:
+            users_dict[row['username']] = {
+                'name': row['name'],
+                'password': row['password_hash'],   # musí být bcrypt hash!
+                'role': row.get('role', 'viewer'),
+            }
+            # email si můžeme přidat volitelně do slovníku, pokud ho později potřebujeme
+            if row.get('email'):
+                users_dict[row['username']]['email'] = row['email']
+                
+        return {"usernames": users_dict}
+    
+    except Exception as e:
+        st.error(f"Chyba při načítání uživatelů z DB: {e}")
+        return {"usernames": {}}
+
+
+# Načteme credentials přímo z DB
+credentials = load_users_from_db()
+
+# Cookie nastavení – může zůstat stejné jako dříve
+cookie_config = {
+    'name': 'planner_auth_cookie',
+    'key': 'planner_streamlit_secret_key',  # ideálně z secrets!
+    'expiry_days': 30,
+}
+
+# Inicializace autentizátoru z DB dat
+authenticator = Authenticate(
+    credentials,
+    cookie_config['name'],
+    cookie_config['key'],
+    cookie_config['expiry_days']
+)
 # Registrace fontu pro PDF
 try:
     pdfmetrics.registerFont(TTFont('DejaVu', 'DejaVuSans.ttf'))
@@ -440,42 +487,69 @@ def get_user_count():
     return len(config['credentials']['usernames'])
 
 
-def add_user(username, name, password, role):
+def add_user(username, name, password, role, email=""):
     if get_user_count() >= 6 and role != 'admin':
         return False, "Maximální počet uživatelů (5 + admin) dosažen."
+    
     with open(USERS_FILE, 'r', encoding='utf-8') as f:
         config = yaml.safe_load(f)
+    
     if username in config['credentials']['usernames']:
         return False, "Uživatel již existuje."
-    config['credentials']['usernames'][username] = {
+    
+    # Hash hesla (použijeme static metodu)
+    hashed_pw = Hasher.hash(password)
+    
+    user_data = {
         'name': name,
-        'password': password,
+        'password': hashed_pw,
         'role': role
     }
+    if email.strip():  # ukládáme jen pokud něco zadali
+        user_data['email'] = email.strip()
+    
+    config['credentials']['usernames'][username] = user_data
+    
     with open(USERS_FILE, 'w', encoding='utf-8') as f:
         yaml.dump(config, f, default_flow_style=False, allow_unicode=True)
+    
     return True, "Uživatel přidán."
 
 
 def reset_password(username, new_password='1234'):
     with open(USERS_FILE, 'r', encoding='utf-8') as f:
         config = yaml.safe_load(f)
+    
     if username not in config['credentials']['usernames']:
         return False, "Uživatel nenalezen."
-    config['credentials']['usernames'][username]['password'] = new_password
+    
+    # Hash nového hesla (použijeme static metodu)
+    hashed_pw = Hasher.hash(new_password)
+    
+    config['credentials']['usernames'][username]['password'] = hashed_pw
+    
     with open(USERS_FILE, 'w', encoding='utf-8') as f:
         yaml.dump(config, f, default_flow_style=False, allow_unicode=True)
-    return True, "Heslo resetováno na 1234."
+    
+    return True, f"Heslo resetováno na '{new_password}' (po přihlášení doporučte změnu!)"
 
 
 def change_password(username, new_password):
     with open(USERS_FILE, 'r', encoding='utf-8') as f:
         config = yaml.safe_load(f)
-    config['credentials']['usernames'][username]['password'] = new_password
+    
+    if username not in config['credentials']['usernames']:
+        return False, "Uživatel nenalezen."
+    
+    # Hash nového hesla (použijeme static metodu)
+    hashed_pw = Hasher.hash(new_password)
+    
+    config['credentials']['usernames'][username]['password'] = hashed_pw
+    
     with open(USERS_FILE, 'w', encoding='utf-8') as f:
         yaml.dump(config, f, default_flow_style=False, allow_unicode=True)
-    return True, "Heslo změněno."
-
+    
+    return True, "Heslo úspěšně změněno."
 
 def create_users_file():
     if not os.path.exists(USERS_FILE):
@@ -502,14 +576,21 @@ def create_users_file():
 
 create_users_file()
 
-with open(USERS_FILE, encoding='utf-8') as file:
-    config = yaml.safe_load(file)
+# Načteme uživatele z databáze místo YAML
+credentials = load_users_from_db()
 
-authenticator = stauth.Authenticate(
-    config['credentials'],
-    config['cookie']['name'],
-    config['cookie']['key'],
-    config['cookie']['expiry_days']
+# Cookie nastavení (může zůstat stejné)
+cookie_config = {
+    'name': 'planner_auth_cookie',
+    'key': 'planner_streamlit_secret_key',  # lepší z secrets.toml!
+    'expiry_days': 30,
+}
+
+authenticator = Authenticate(
+    credentials,
+    cookie_config['name'],
+    cookie_config['key'],
+    cookie_config['expiry_days']
 )
 
 
