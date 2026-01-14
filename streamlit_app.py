@@ -82,6 +82,15 @@ authenticator = st.session_state.authenticator
 if 'authentication_status' not in st.session_state:
     st.session_state.authentication_status = None
 
+st.set_page_config(
+    page_title="Plánovač Horkých komor CVŘ",
+    page_icon=":radioactive:",
+    layout="wide"
+)
+
+st.title("Plánovač Horkých komor CVŘ")
+
+
 # ──────────────────────────────────────────────────────────────
 # LOGIN – jen jednou, pokud není stav rozhodnut
 # ──────────────────────────────────────────────────────────────
@@ -502,13 +511,7 @@ def change_password(username, new_password):
 # ============================
 # HLAVNÍ APLIKACE
 # ============================
-st.set_page_config(
-    page_title="Plánovač Horkých komor CVŘ",
-    page_icon=":radioactive:",
-    layout="wide"
-)
 
-st.title("Plánovač Horkých komor CVŘ")
 
 # Zpracování stavu po loginu
 if st.session_state.get('authentication_status'):
