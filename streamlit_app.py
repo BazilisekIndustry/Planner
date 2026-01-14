@@ -65,19 +65,18 @@ cookie_config = {
 }
 
 # Inicializace autentizátoru z DB dat
-authenticator = Authenticate(
-    credentials,
-    cookie_name=cookie_config['name'],
-    key=cookie_config['key'],
-    cookie_expiry_days=cookie_config['expiry_days'],
-    preauthorized=None,                  # pokud nepoužíváš
-    validator=None,
-    # Tady je důležité:
-    location='main',                     # nebo 'sidebar' podle tvého layoutu
-    # Nebo ještě lepší - explicitní unikátní klíč pro cookie manager:
-    # (tohle řeší 90 % případů)
-    cookie_manager_key="planner_cookie_manager_unique"   # ← přidej toto
-)
+@st.cache_resource
+def get_authenticator():
+    creds = load_users_from_db()
+    return Authenticate(
+        creds,
+        cookie_name='planner_auth_cookie',
+        key='planner_streamlit_secret_key',
+        cookie_expiry_days=30,
+        location='main'  # nebo 'sidebar' podle tvého designu
+    )
+
+authenticator = get_authenticator()
 # Registrace fontu pro PDF
 try:
     pdfmetrics.registerFont(TTFont('DejaVu', 'DejaVuSans.ttf'))
