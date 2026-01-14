@@ -89,6 +89,7 @@ st.set_page_config(
 )
 
 st.title("Plánovač Horkých komor CVŘ")
+st.markdown("Vítejte v Plánovači Horkých komor CVŘ. Přihlaste se prosím. \n\n Pro založení nového uživatele kontaktujte petr.svrcula@cvrez.cz.")
 
 
 # ──────────────────────────────────────────────────────────────
