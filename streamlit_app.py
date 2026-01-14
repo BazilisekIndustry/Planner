@@ -20,14 +20,18 @@ from streamlit_authenticator.utilities.hasher import Hasher
 # ============================
 # KONFIGURACE
 # ============================
-USERS_FILE = 'users.yaml'  # už jen pro případné legacy části, jinak nepoužíváme
+
 SUPABASE_URL = st.secrets["supabase_url"]
 SUPABASE_KEY = st.secrets["supabase_key"]
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+COOKIE_NAME = 'planner_auth_cookie'
+COOKIE_KEY = st.secrets.get("cookie_key", "planner_streamlit_secret_key")  # fallback
+COOKIE_EXPIRY_DAYS = 30
+
 # Načítání uživatelů z databáze (bez cache, bez widgetů uvnitř funkce)
+@st.cache_data(ttl=600)  # 10 minut cache – dostatečné pro malý počet uživatelů
 def load_users_from_db():
-    """Načte uživatele z DB – bez widgetů uvnitř"""
     try:
         response = supabase.table('app_users')\
                    .select("username, name, password_hash, role, email")\
@@ -49,17 +53,10 @@ def load_users_from_db():
         print(f"[ERROR] Načítání uživatelů selhalo: {str(e)}")
         return {"usernames": {}}
 
-
-# Cachovaná verze načítání (pro .clear())
-@st.cache_data(ttl=600)  # 10 minut – dostatečně dlouho, ale obnoví se při změně
-def cached_load_users():
-    return load_users_from_db()
-
-
-credentials = cached_load_users()
+credentials = load_users_from_db()
 
 if not credentials.get("usernames", {}):
-    st.warning("V databázi nejsou žádní uživatelé nebo chyba při načítání.")
+    st.warning("V databázi nejsou žádní uživatelé nebo došlo k chybě při načítání.")
 
 
 # Cookie config
@@ -68,11 +65,11 @@ COOKIE_KEY = st.secrets.get("cookie_key", "planner_streamlit_secret_key")
 COOKIE_EXPIRY_DAYS = 30
 
 
-# Jediná správná inicializace Authenticate
 @st.cache_resource
-def get_authenticator(creds):
+def create_authenticator():
+    creds = load_users_from_db()  # znovu načteme – cache zaručí rychlost
     return Authenticate(
-        creds,
+        credentials=creds,
         cookie_name=COOKIE_NAME,
         key=COOKIE_KEY,
         cookie_expiry_days=COOKIE_EXPIRY_DAYS,
@@ -80,20 +77,29 @@ def get_authenticator(creds):
     )
 
 
-# Použij session_state → zabrání duplicitním elementům při rerun
+# Pouze jednou za session vytvoříme instanci
 if 'authenticator' not in st.session_state:
-    st.session_state.authenticator = get_authenticator(credentials)
+    st.session_state.authenticator = create_authenticator()
 
 authenticator = st.session_state.authenticator
 
-# Login
-authenticator.login(location='main')
 
-if st.session_state.get('authentication_status'):
-    username = st.session_state['username']
-    role = st.session_state.authenticator.credentials["usernames"][username].get('role', 'viewer')
-    name = st.session_state['name']
+# ──────────────────────────────────────────────────────────────
+# LOGIN – spouštíme jen pokud ještě není stav přihlášení
+# ──────────────────────────────────────────────────────────────
+if 'authentication_status' not in st.session_state:
+    st.session_state.authentication_status = None
+
+# Login formulář – jen pokud nejsme přihlášeni
+if st.session_state.authentication_status is None:
+    authenticator.login(location='main')
+
+
 # Registrace fontu pro PDF
+
+
+
+
 try:
     pdfmetrics.registerFont(TTFont('DejaVu', 'DejaVuSans.ttf'))
     PDF_FONT = 'DejaVu'
@@ -628,30 +634,55 @@ authenticator = Authenticate(
 )
 
 
-# ============================
-# HLAVNÍ APLIKACE
-# ============================
-st.set_page_config(page_title="Plánovač Horkých komor CVŘ", page_icon=":radioactive:", layout="wide")
+# ──────────────────────────────────────────────────────────────
+# HLAVNÍ APLIKACE – po autentizaci
+# ──────────────────────────────────────────────────────────────
+st.set_page_config(
+    page_title="Plánovač Horkých komor CVŘ",
+    page_icon=":radioactive:",
+    layout="wide"
+)
+
 st.title("Plánovač Horkých komor CVŘ")
 
-if not st.session_state.get('authentication_status'):
+# Inicializace stavu přihlášení (pokud ještě není)
+if 'authentication_status' not in st.session_state:
+    st.session_state.authentication_status = None
+
+# Zobrazení uvítací zprávy, pokud nejsme přihlášeni
+if st.session_state.authentication_status is None:
     st.markdown(
         "Vítejte v Plánovači Horkých komor CVŘ. Přihlaste se prosím.\n\n"
         "Pro založení nového uživatele kontaktujte petr.svrcula@cvrez.cz."
     )
 
-authenticator.login(location='main')
+# Login formulář – spouštíme JEN pokud ještě není stav přihlášení rozhodnut
+if st.session_state.authentication_status is None:
+    authenticator.login(location='main')
 
+# ──────────────────────────────────────────────────────────────
+# PŘIHLÁŠENÝ UŽIVATEL
+# ──────────────────────────────────────────────────────────────
 if st.session_state.get('authentication_status'):
     username = st.session_state['username']
-    role = get_user_role(username)
     name = st.session_state['name']
-
+    
+    # Role získáme přímo z credentials (bezpečnější, bez YAML)
+    role = authenticator.credentials["usernames"]\
+                      .get(username, {})\
+                      .get('role', 'viewer')
+    
     st.sidebar.success(f"Vítej, {name} ({role})!")
     authenticator.logout('Odhlásit se', location='sidebar')
-
+    
     init_db()
     read_only = (role == 'viewer')
+
+# ──────────────────────────────────────────────────────────────
+# NEPŘIHLÁŠENÝ / CHYBNÉ PŘIHLÁŠENÍ
+# ──────────────────────────────────────────────────────────────
+elif st.session_state.authentication_status is False:
+    st.error("Nesprávné přihlašovací údaje")
 
     options = [
         "Přidat projekt / úkol",
