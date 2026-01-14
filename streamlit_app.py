@@ -1107,6 +1107,33 @@ if st.session_state.get('authentication_status'):
                 else:
                     st.error(message)
 
+        st.subheader("Resetovat heslo uživatele")           
+            # Načteme aktuální uživatele pro výběr
+        try:
+                users_response = supabase.table('app_users')\
+                                .select("username, name")\
+                                .execute()
+                
+                if users_response.data:
+                    user_options = [f"{row['username']} ({row['name']})" for row in users_response.data]
+                    selected_user_str = st.selectbox("Vyberte uživatele k resetu hesla", user_options, key="reset_user_select")
+                    
+                    if selected_user_str:
+                        selected_username = selected_user_str.split(" (")[0]  # extrahujeme jen username
+                        
+                        if st.button("Resetovat heslo na 1234", type="primary"):
+                            success, message = reset_password(selected_username)
+                            if success:
+                                st.success(message)
+                                load_users_from_db.clear()  # aktualizace cache
+                                st.rerun()
+                            else:
+                                st.error(message)
+                else:
+                    st.info("Žádní uživatelé v databázi.")
+        except Exception as e:
+                st.error(f"Chyba při načítání uživatelů pro reset: {e}")
+
         st.subheader("Aktuální uživatelé")
         try:
             users_response = supabase.table('app_users')\
