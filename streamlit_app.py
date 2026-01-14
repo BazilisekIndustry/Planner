@@ -25,58 +25,63 @@ SUPABASE_URL = st.secrets["supabase_url"]
 SUPABASE_KEY = st.secrets["supabase_key"]
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-@st.cache_data(ttl=300, show_spinner="Načítám uživatele z databáze...")  # 5 minut cache
 def load_users_from_db():
+    """Načte uživatele z DB – bez cachování a bez widgetů uvnitř"""
     try:
         response = supabase.table('app_users')\
                    .select("username, name, password_hash, role, email")\
                    .execute()
         
         if not response.data:
-            st.warning("V databázi nejsou žádní uživatelé!")
-            return {"usernames": {}}
-            
+            return {"usernames": {}}, "V databázi nejsou žádní uživatelé!"
+        
         users_dict = {}
         for row in response.data:
             users_dict[row['username']] = {
                 'name': row['name'],
-                'password': row['password_hash'],   # musí být bcrypt hash!
+                'password': row['password_hash'],
                 'role': row.get('role', 'viewer'),
             }
-            # email si můžeme přidat volitelně do slovníku, pokud ho později potřebujeme
             if row.get('email'):
                 users_dict[row['username']]['email'] = row['email']
                 
-        return {"usernames": users_dict}
+        return {"usernames": users_dict}, None
     
     except Exception as e:
-        st.error(f"Chyba při načítání uživatelů z DB: {e}")
-        return {"usernames": {}}
+        return {"usernames": {}}, f"Chyba při načítání uživatelů: {str(e)}"
 
 
-# Načteme credentials přímo z DB
-credentials = load_users_from_db()
+# Načtení dat + zobrazení případných problémů
+credentials, load_error = load_users_from_db()
 
-# Cookie nastavení – může zůstat stejné jako dříve
+if load_error:
+    if "nejsou žádní uživatelé" in load_error:
+        st.warning(load_error)
+    else:
+        st.error(load_error)
+
+
+# Cookie config (ideálně z secrets)
 cookie_config = {
     'name': 'planner_auth_cookie',
-    'key': 'planner_streamlit_secret_key',  # ideálně z secrets!
+    'key': 'planner_streamlit_secret_key',  # ← lepší ze st.secrets["cookie_key"] !
     'expiry_days': 30,
 }
 
-# Inicializace autentizátoru z DB dat
+
+# Authenticator cachovaný – bez widgetů, takže OK
 @st.cache_resource
-def get_authenticator():
-    creds = load_users_from_db()
+def get_authenticator(creds):
     return Authenticate(
         creds,
-        cookie_name='planner_auth_cookie',
-        key='planner_streamlit_secret_key',
-        cookie_expiry_days=30,
-        location='main'  # nebo 'sidebar' podle tvého designu
+        cookie_name=cookie_config['name'],
+        key=cookie_config['key'],
+        cookie_expiry_days=cookie_config['expiry_days'],
+        location='main'
     )
 
-authenticator = get_authenticator()
+# Použijeme credentials, které jsme už načetli
+authenticator = get_authenticator(credentials)
 # Registrace fontu pro PDF
 try:
     pdfmetrics.registerFont(TTFont('DejaVu', 'DejaVuSans.ttf'))
