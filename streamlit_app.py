@@ -87,7 +87,7 @@ st.set_page_config(
     page_icon=":radioactive:",
     layout="wide"
 )
-
+st.title("Plánovač Horkých komor CVŘ")
 
 
 
@@ -95,7 +95,6 @@ st.set_page_config(
 # LOGIN – jen jednou, pokud není stav rozhodnut
 # ──────────────────────────────────────────────────────────────
 if st.session_state.authentication_status is None:
-    st.title("Plánovač Horkých komor CVŘ")
     st.markdown("Vítejte v Plánovači Horkých komor CVŘ. Přihlaste se prosím. \n\n Pro založení nového uživatele kontaktujte petr.svrcula@cvrez.cz.")
     authenticator.login(location='main')
 
