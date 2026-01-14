@@ -587,30 +587,29 @@ def change_password(username, new_password):
     
     return True, "Heslo úspěšně změněno."
 
-def create_users_file():
-    if not os.path.exists(USERS_FILE):
-        users = {
-            'credentials': {
-                'usernames': {
-                    'admin': {
-                        'name': 'Administrátor',
-                        'password': 'admin123',
-                        'role': 'admin'
-                    }
-                }
-            },
-            'cookie': {
-                'expiry_days': 30,
-                'key': 'planner_streamlit_secret_key',
-                'name': 'planner_auth_cookie'
-            },
-            'preauthorized': []
-        }
-        with open(USERS_FILE, 'w', encoding='utf-8') as f:
-            yaml.dump(users, f, default_flow_style=False, allow_unicode=True)
+#def create_users_file():
+ #   if not os.path.exists(USERS_FILE):
+  #      users = {
+   #         'credentials': {
+    #            'usernames': {
+     #               'admin': {
+      #                  'name': 'Administrátor',
+       #                'role': 'admin'
+        #            }
+         #       }
+          #  },
+           # 'cookie': {
+            #    'expiry_days': 30,
+             #   'key': 'planner_streamlit_secret_key',
+              #  'name': 'planner_auth_cookie'
+            #},
+            #'preauthorized': []
+        #}
+        #with open(USERS_FILE, 'w', encoding='utf-8') as f:
+         #   yaml.dump(users, f, default_flow_style=False, allow_unicode=True)
 
 
-create_users_file()
+#create_users_file()
 
 # Načteme uživatele z databáze místo YAML
 credentials = load_users_from_db()
