@@ -1,6 +1,5 @@
 import streamlit as st
 from streamlit_authenticator import Authenticate
-import yaml
 import os
 from datetime import datetime, timedelta, date
 import math
@@ -20,7 +19,6 @@ from streamlit_authenticator.utilities.hasher import Hasher
 # ============================
 # KONFIGURACE
 # ============================
-
 SUPABASE_URL = st.secrets["supabase_url"]
 SUPABASE_KEY = st.secrets["supabase_key"]
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -29,11 +27,12 @@ COOKIE_NAME = 'planner_auth_cookie'
 COOKIE_KEY = st.secrets.get("cookie_key", "planner_streamlit_secret_key")  # fallback
 COOKIE_EXPIRY_DAYS = 30
 
+# Oprava KeyError 'logout' – streamlit-authenticator to vyžaduje
 if 'logout' not in st.session_state:
     st.session_state['logout'] = False
 
-# Načítání uživatelů z databáze (bez cache, bez widgetů uvnitř funkce)
-@st.cache_data(ttl=600)  # 10 minut cache – dostatečné pro malý počet uživatelů
+# Načítání uživatelů z databáze (cachované, bez widgetů uvnitř)
+@st.cache_data(ttl=600)  # 10 minut – dostatečně dlouho
 def load_users_from_db():
     try:
         response = supabase.table('app_users')\
@@ -56,14 +55,16 @@ def load_users_from_db():
         print(f"[ERROR] Načítání uživatelů selhalo: {str(e)}")
         return {"usernames": {}}
 
+
 credentials = load_users_from_db()
 
 if not credentials.get("usernames", {}):
     st.warning("V databázi nejsou žádní uživatelé nebo došlo k chybě při načítání.")
 
+# Authenticator – jediná inicializace přes cache + session_state
 @st.cache_resource
 def create_authenticator():
-    creds = load_users_from_db()  # znovu načteme – cache zaručí rychlost
+    creds = load_users_from_db()  # cache zaručí rychlost
     return Authenticate(
         credentials=creds,
         cookie_name=COOKIE_NAME,
@@ -72,30 +73,24 @@ def create_authenticator():
         location='main'
     )
 
-
-# Pouze jednou za session vytvoříme instanci
 if 'authenticator' not in st.session_state:
     st.session_state.authenticator = create_authenticator()
 
 authenticator = st.session_state.authenticator
 
-
-# ──────────────────────────────────────────────────────────────
-# LOGIN – spouštíme jen pokud ještě není stav přihlášení
-# ──────────────────────────────────────────────────────────────
+# Inicializace stavu přihlášení
 if 'authentication_status' not in st.session_state:
     st.session_state.authentication_status = None
 
-# Login formulář – jen pokud nejsme přihlášeni
+# ──────────────────────────────────────────────────────────────
+# LOGIN – jen jednou, pokud není stav rozhodnut
+# ──────────────────────────────────────────────────────────────
 if st.session_state.authentication_status is None:
     authenticator.login(location='main')
 
-
-# Registrace fontu pro PDF
-
-
-
-
+# ──────────────────────────────────────────────────────────────
+# REGISTRACE FONTU PRO PDF
+# ──────────────────────────────────────────────────────────────
 try:
     pdfmetrics.registerFont(TTFont('DejaVu', 'DejaVuSans.ttf'))
     PDF_FONT = 'DejaVu'
@@ -118,7 +113,6 @@ def get_easter(year):
     easter_sunday = date(year, month, day)
     return easter_sunday + timedelta(days=1)
 
-
 def get_holidays(year):
     return [
         date(year, 1, 1),
@@ -135,7 +129,6 @@ def get_holidays(year):
         date(year, 12, 26),
     ]
 
-
 def is_holiday(dt):
     holidays = get_holidays(dt.year)
     if dt.month == 1:
@@ -144,27 +137,22 @@ def is_holiday(dt):
         holidays += get_holidays(dt.year + 1)
     return dt in holidays
 
-
 def is_weekend_or_holiday(dt):
     return dt.weekday() >= 5 or is_holiday(dt)
-
 
 def is_working_day(dt, mode):
     if mode == '7.5' and dt.weekday() >= 5:
         return False
     return not is_holiday(dt)
 
-
 def normalize_date_str(date_str):
     if not date_str:
         return None
     return re.sub(r'[./]', '-', date_str.strip())
 
-
 def ddmmyyyy_to_yyyymmdd(date_str):
     if not date_str or not date_str.strip():
         return None
-
     normalized = normalize_date_str(date_str)
     try:
         day, month, year = map(int, normalized.split('-'))
@@ -172,7 +160,6 @@ def ddmmyyyy_to_yyyymmdd(date_str):
         return dt.strftime('%Y-%m-%d')
     except (ValueError, TypeError):
         raise ValueError("Neplatný formát data. Použijte např. 1.1.2026, 01.01.2026, 1-1-2026 apod.")
-
 
 def yyyymmdd_to_ddmmyyyy(date_str):
     if not date_str:
@@ -182,17 +169,14 @@ def yyyymmdd_to_ddmmyyyy(date_str):
     except Exception:
         return ""
 
-
 def validate_ddmmyyyy(date_str):
     if not date_str:
         return True
-
     normalized = normalize_date_str(date_str)
     pattern = re.compile(r'^(\d{1,2})-(\d{1,2})-(\d{4})$')
     match = pattern.match(normalized)
     if not match:
         return False
-
     try:
         day, month, year = map(int, match.groups())
         if not (1 <= day <= 31 and 1 <= month <= 12 and 2000 <= year <= 2100):
@@ -200,7 +184,6 @@ def validate_ddmmyyyy(date_str):
         return True
     except Exception:
         return False
-
 
 def calculate_end_date(start_yyyymmdd, hours, mode):
     if not start_yyyymmdd:
@@ -215,7 +198,6 @@ def calculate_end_date(start_yyyymmdd, hours, mode):
         current += timedelta(days=1)
     return (current - timedelta(days=1)).strftime('%Y-%m-%d')
 
-
 def get_next_working_day_after(date_str, capacity_mode):
     if not date_str:
         return None
@@ -224,33 +206,27 @@ def get_next_working_day_after(date_str, capacity_mode):
         current += timedelta(days=1)
     return current.strftime('%Y-%m-%d')
 
-
 # ============================
 # DATABÁZOVÉ FUNKCE
 # ============================
 def init_db():
     pass
 
-
 def get_projects():
     response = supabase.table('projects').select('id, name').execute()
     return [(row['id'], row['name']) for row in response.data]
-
 
 def get_project_choices():
     projects = get_projects()
     return [str(p[0]) for p in projects] if projects else []
 
-
 def get_workplaces():
     response = supabase.table('workplaces').select('id, name').execute()
     return [(row['id'], row['name']) for row in response.data]
 
-
 def get_workplace_name(wp_id):
     response = supabase.table('workplaces').select('name').eq('id', wp_id).execute()
     return response.data[0]['name'] if response.data else f"ID {wp_id}"
-
 
 def add_workplace(name):
     if not name.strip():
@@ -261,14 +237,12 @@ def add_workplace(name):
     except Exception:
         return False
 
-
 def delete_workplace(wp_id):
     response = supabase.table('tasks').select('id').eq('workplace_id', wp_id).execute()
     if response.data:
         return False
     supabase.table('workplaces').delete().eq('id', wp_id).execute()
     return True
-
 
 def add_project(project_id, name):
     try:
@@ -277,15 +251,12 @@ def add_project(project_id, name):
     except Exception:
         return False
 
-
 def get_tasks(project_id):
     response = supabase.table('tasks').select('*').eq('project_id', project_id).execute()
     return response.data
 
-
 def add_task(project_id, workplace_id, hours, mode, start_ddmmyyyy=None, notes='', bodies_count=1, is_active=True, parent_id=None):
     start_yyyymmdd = ddmmyyyy_to_yyyymmdd(start_ddmmyyyy) if start_ddmmyyyy else None
-
     data = {
         'project_id': project_id,
         'workplace_id': workplace_id,
@@ -296,18 +267,13 @@ def add_task(project_id, workplace_id, hours, mode, start_ddmmyyyy=None, notes='
         'bodies_count': bodies_count,
         'is_active': is_active
     }
-
     response = supabase.table('tasks').insert(data).execute()
     task_id = response.data[0]['id']
-
     if parent_id:
         supabase.table('task_dependencies').insert({'task_id': task_id, 'parent_id': parent_id}).execute()
-
     if start_yyyymmdd:
         recalculate_from_task(task_id)
-
     return task_id
-
 
 def update_task(task_id, field, value, is_internal=False):
     if field in ('start_date', 'end_date') and value and not is_internal:
@@ -318,24 +284,20 @@ def update_task(task_id, field, value, is_internal=False):
         'task_id': task_id,
         'change_time': now,
         'description': f'Updated {field} to {value}',
-        'changed_by': st.session_state['username']
+        'changed_by': st.session_state.get('username', 'system')
     }).execute()
-
 
 def get_task(task_id):
     response = supabase.table('tasks').select('*').eq('id', task_id).execute()
     return response.data[0] if response.data else None
 
-
 def get_parent(task_id):
     response = supabase.table('task_dependencies').select('parent_id').eq('task_id', task_id).execute()
     return response.data[0]['parent_id'] if response.data else None
 
-
 def get_children(parent_id):
     response = supabase.table('task_dependencies').select('task_id').eq('parent_id', parent_id).execute()
     return [row['task_id'] for row in response.data]
-
 
 def has_cycle(task_id):
     visited = set()
@@ -347,12 +309,10 @@ def has_cycle(task_id):
         current = get_parent(current)
     return False
 
-
 def recalculate_from_task(task_id):
     task = get_task(task_id)
     if not task:
         return
-
     if task['status'] == 'canceled':
         update_task(task_id, 'end_date', None, is_internal=True)
         child_start = None
@@ -368,7 +328,6 @@ def recalculate_from_task(task_id):
         else:
             update_task(task_id, 'end_date', None, is_internal=True)
             child_start = None
-
     children = get_children(task_id)
     for child_id in children:
         child = get_task(child_id)
@@ -376,7 +335,6 @@ def recalculate_from_task(task_id):
             continue
         update_task(child_id, 'start_date', child_start, is_internal=True)
         recalculate_from_task(child_id)
-
 
 def recalculate_project(project_id):
     tasks = get_tasks(project_id)
@@ -388,21 +346,14 @@ def recalculate_project(project_id):
     for root_id in root_ids:
         recalculate_from_task(root_id)
 
-
 def get_colliding_projects_simulated(workplace_id, start_date, end_date):
-    """
-    Simulovaná kontrola kolizí pro ještě nepřidaný úkol (bez použití task_id).
-    Vrátí seznam project_id, se kterými by nový úkol kolidoval.
-    """
     if not start_date or not end_date:
         return []
-
     try:
         new_start = datetime.strptime(start_date, '%Y-%m-%d').date()
         new_end = datetime.strptime(end_date, '%Y-%m-%d').date()
     except Exception:
         return []
-
     response = (
         supabase.table('tasks')
         .select('project_id, start_date, end_date')
@@ -411,7 +362,6 @@ def get_colliding_projects_simulated(workplace_id, start_date, end_date):
         .not_.is_('end_date', 'null')
         .execute()
     )
-
     colliding = []
     for row in response.data:
         try:
@@ -421,19 +371,15 @@ def get_colliding_projects_simulated(workplace_id, start_date, end_date):
                 colliding.append(row['project_id'])
         except Exception:
             continue
-
     return list(set(colliding))
-
 
 def get_colliding_projects(task_id):
     task = get_task(task_id)
     if not task or not task.get('start_date') or not task.get('end_date'):
         return []
-
     wp = task['workplace_id']
     start = datetime.strptime(task['start_date'], '%Y-%m-%d').date()
     end = datetime.strptime(task['end_date'], '%Y-%m-%d').date()
-
     response = (
         supabase.table('tasks')
         .select('project_id, start_date, end_date')
@@ -443,7 +389,6 @@ def get_colliding_projects(task_id):
         .not_.is_('end_date', 'null')
         .execute()
     )
-
     colliding = []
     for row in response.data:
         try:
@@ -453,19 +398,15 @@ def get_colliding_projects(task_id):
                 colliding.append(row['project_id'])
         except Exception:
             continue
-
     return list(set(colliding))
-
 
 def check_collisions(task_id):
     return len(get_colliding_projects(task_id)) > 0
-
 
 def mark_all_collisions():
     response = supabase.table('tasks').select('id').not_.is_('start_date', 'null').not_.is_('end_date', 'null').execute()
     ids = [row['id'] for row in response.data]
     return {tid: check_collisions(tid) for tid in ids}
-
 
 def delete_task(task_id):
     try:
@@ -477,7 +418,6 @@ def delete_task(task_id):
     except Exception as e:
         st.error(f"Chyba při mazání úkolu: {str(e)}")
         return False
-
 
 def delete_project(project_id):
     try:
@@ -493,30 +433,10 @@ def delete_project(project_id):
         st.error(f"Chyba při mazání projektu {project_id}: {str(e)}")
         return False
 
-
 # ============================
-# USER MANAGEMENT FUNKCE
+# USER MANAGEMENT FUNKCE – vše přes Supabase
 # ============================
-def get_user_role(username):
-    with open(USERS_FILE, 'r', encoding='utf-8') as f:
-        config = yaml.safe_load(f)
-    usernames_lower = {k.lower(): v for k, v in config['credentials']['usernames'].items()}
-    user_data = usernames_lower.get(username.lower(), {})
-    return user_data.get('role', 'viewer')
-
-
-def get_user_count():
-    with open(USERS_FILE, 'r', encoding='utf-8') as f:
-        config = yaml.safe_load(f)
-    return len(config['credentials']['usernames'])
-
-
 def add_user(username, name, password, role, email=""):
-    """
-    Přidá nového uživatele do Supabase tabulky app_users.
-    Vrátí (success: bool, message: str)
-    """
-    # Kontrola maximálního počtu uživatelů (volitelné omezení, můžeš odstranit)
     try:
         count_response = supabase.table('app_users').select("count", count="exact").execute()
         user_count = count_response.count
@@ -525,113 +445,63 @@ def add_user(username, name, password, role, email=""):
     except Exception as e:
         return False, f"Chyba při kontrole počtu uživatelů: {e}"
 
-    # Kontrola, zda uživatel již existuje
     check = supabase.table('app_users').select("username").eq("username", username).execute()
     if check.data:
         return False, "Uživatel s tímto uživatelským jménem již existuje."
 
-    # Hash hesla (výchozí heslo bude '1234', pokud není zadáno jiné)
     hashed_pw = Hasher.hash(password)
-
     data = {
         "username": username,
         "name": name,
         "password_hash": hashed_pw,
         "role": role,
     }
-
     if email.strip():
         data["email"] = email.strip()
 
     try:
         response = supabase.table('app_users').insert(data).execute()
         if response.data:
+            load_users_from_db.clear()  # Vyčistíme cache
             return True, "Uživatel úspěšně přidán do databáze."
         else:
-            return False, "Nepodařilo se vložit uživatele (neznámá chyba)."
+            return False, "Nepodařilo se vložit uživatele."
     except Exception as e:
-        return False, f"Chyba při vkládání do databáze: {str(e)}"
+        return False, f"Chyba při vkládání: {str(e)}"
 
 def reset_password(username, new_password='1234'):
-    with open(USERS_FILE, 'r', encoding='utf-8') as f:
-        config = yaml.safe_load(f)
-    
-    if username not in config['credentials']['usernames']:
-        return False, "Uživatel nenalezen."
-    
-    # Hash nového hesla (použijeme static metodu)
     hashed_pw = Hasher.hash(new_password)
-    
-    config['credentials']['usernames'][username]['password'] = hashed_pw
-    
-    with open(USERS_FILE, 'w', encoding='utf-8') as f:
-        yaml.dump(config, f, default_flow_style=False, allow_unicode=True)
-    
-    return True, f"Heslo resetováno na '{new_password}' (po přihlášení doporučte změnu!)"
-
+    try:
+        response = supabase.table('app_users')\
+                   .update({"password_hash": hashed_pw})\
+                   .eq("username", username)\
+                   .execute()
+        if response.data:
+            load_users_from_db.clear()
+            return True, f"Heslo resetováno na '{new_password}' (doporučte změnu po přihlášení)."
+        else:
+            return False, "Uživatel nenalezen."
+    except Exception as e:
+        return False, f"Chyba při resetu hesla: {str(e)}"
 
 def change_password(username, new_password):
-    with open(USERS_FILE, 'r', encoding='utf-8') as f:
-        config = yaml.safe_load(f)
-    
-    if username not in config['credentials']['usernames']:
-        return False, "Uživatel nenalezen."
-    
-    # Hash nového hesla (použijeme static metodu)
     hashed_pw = Hasher.hash(new_password)
-    
-    config['credentials']['usernames'][username]['password'] = hashed_pw
-    
-    with open(USERS_FILE, 'w', encoding='utf-8') as f:
-        yaml.dump(config, f, default_flow_style=False, allow_unicode=True)
-    
-    return True, "Heslo úspěšně změněno."
+    try:
+        response = supabase.table('app_users')\
+                   .update({"password_hash": hashed_pw})\
+                   .eq("username", username)\
+                   .execute()
+        if response.data:
+            load_users_from_db.clear()
+            return True, "Heslo úspěšně změněno."
+        else:
+            return False, "Uživatel nenalezen."
+    except Exception as e:
+        return False, f"Chyba při změně hesla: {str(e)}"
 
-#def create_users_file():
- #   if not os.path.exists(USERS_FILE):
-  #      users = {
-   #         'credentials': {
-    #            'usernames': {
-     #               'admin': {
-      #                  'name': 'Administrátor',
-       #                'role': 'admin'
-        #            }
-         #       }
-          #  },
-           # 'cookie': {
-            #    'expiry_days': 30,
-             #   'key': 'planner_streamlit_secret_key',
-              #  'name': 'planner_auth_cookie'
-            #},
-            #'preauthorized': []
-        #}
-        #with open(USERS_FILE, 'w', encoding='utf-8') as f:
-         #   yaml.dump(users, f, default_flow_style=False, allow_unicode=True)
-
-
-#create_users_file()
-
-# Načteme uživatele z databáze místo YAML
-credentials = load_users_from_db()
-
-# Cookie nastavení (může zůstat stejné)
-cookie_config = {
-    'name': 'planner_auth_cookie',
-    'key': 'planner_streamlit_secret_key',  # lepší z secrets.toml!
-    'expiry_days': 30,
-}
-
-authenticator = Authenticate(
-    credentials,
-    cookie_config['name'],
-    cookie_config['key'],
-    cookie_config['expiry_days']
-)
-
-
-# ──────────────────────────────────────────────────────────────
-# HLAVNÍ APLIKACE – po autentizaci
-# ──────────────────────────────────────────────────────────────
+# ============================
+# HLAVNÍ APLIKACE
+# ============================
 st.set_page_config(
     page_title="Plánovač Horkých komor CVŘ",
     page_icon=":radioactive:",
@@ -640,44 +510,17 @@ st.set_page_config(
 
 st.title("Plánovač Horkých komor CVŘ")
 
-# Inicializace stavu přihlášení (pokud ještě není)
-if 'authentication_status' not in st.session_state:
-    st.session_state.authentication_status = None
-
-# Zobrazení uvítací zprávy, pokud nejsme přihlášeni
-if st.session_state.authentication_status is None:
-    st.markdown(
-        "Vítejte v Plánovači Horkých komor CVŘ. Přihlaste se prosím.\n\n"
-        "Pro založení nového uživatele kontaktujte petr.svrcula@cvrez.cz."
-    )
-
-# Login formulář – spouštíme JEN pokud ještě není stav přihlášení rozhodnut
-if st.session_state.authentication_status is None:
-    authenticator.login(location='main')
-
-# ──────────────────────────────────────────────────────────────
-# PŘIHLÁŠENÝ UŽIVATEL
-# ──────────────────────────────────────────────────────────────
+# Zpracování stavu po loginu
 if st.session_state.get('authentication_status'):
     username = st.session_state['username']
     name = st.session_state['name']
-    
-    # Role získáme přímo z credentials (bezpečnější, bez YAML)
-    role = authenticator.credentials["usernames"]\
-                      .get(username, {})\
-                      .get('role', 'viewer')
-    
+    role = authenticator.credentials["usernames"][username].get('role', 'viewer')
+
     st.sidebar.success(f"Vítej, {name} ({role})!")
     authenticator.logout('Odhlásit se', location='sidebar')
-    
+
     init_db()
     read_only = (role == 'viewer')
-
-# ──────────────────────────────────────────────────────────────
-# NEPŘIHLÁŠENÝ / CHYBNÉ PŘIHLÁŠENÍ
-# ──────────────────────────────────────────────────────────────
-elif st.session_state.authentication_status is False:
-    st.error("Nesprávné přihlašovací údaje")
 
     options = [
         "Přidat projekt / úkol",
@@ -694,17 +537,14 @@ elif st.session_state.authentication_status is False:
 
     if option == "Přidat projekt / úkol":
         st.header("Přidat projekt a úkol")
-
         if role == 'viewer':
             st.error("Přístup jen pro administrátory a normální uživatele.")
         else:
             col1, col2 = st.columns(2)
-
             with col1:
                 st.subheader("Přidat projekt")
                 proj_id = st.text_input("Číslo projektu (povinné)", key="new_proj_id")
                 proj_name = st.text_input("Název projektu (volitelné)", key="new_proj_name")
-
                 if st.button("Přidat projekt"):
                     if proj_id.strip():
                         try:
@@ -801,7 +641,6 @@ elif st.session_state.authentication_status is False:
                                 start_yyyymmdd = ddmmyyyy_to_yyyymmdd(start_ddmmyyyy) if start_ddmmyyyy else None
                                 temp_end = calculate_end_date(start_yyyymmdd, float(hours), capacity_mode) if start_yyyymmdd else None
 
-                                # 1. Kontrola kolizí v rámci stejného projektu → tvrdé zastavení
                                 conflict_in_project = False
                                 if start_yyyymmdd and temp_end:
                                     existing_in_project = (
@@ -831,7 +670,6 @@ elif st.session_state.authentication_status is False:
                                         "Upravte existující úkol(y) a zkuste znovu."
                                     )
                                 else:
-                                    # 2. Kontrola cross-projektových kolizí
                                     colliding_projects = []
                                     if start_yyyymmdd and temp_end:
                                         colliding_projects = get_colliding_projects_simulated(
@@ -841,7 +679,6 @@ elif st.session_state.authentication_status is False:
                                         )
 
                                     if colliding_projects:
-                                        # Uložení pro dialog
                                         st.session_state['pending_task_data'] = {
                                             'project_id': project_id,
                                             'workplace_id': wp_id,
@@ -857,7 +694,6 @@ elif st.session_state.authentication_status is False:
                                         st.session_state['show_collision_confirm'] = True
                                         st.rerun()
                                     else:
-                                        # Přímé přidání bez kolize
                                         task_id = add_task(
                                             project_id=project_id,
                                             workplace_id=wp_id,
@@ -887,18 +723,16 @@ elif st.session_state.authentication_status is False:
                             except Exception as e:
                                 st.error(f"Chyba při kontrole/přidávání úkolu: {e}")
 
-            # Potvrzovací dialog pro cross-projektovou kolizi
+            # Potvrzovací dialog pro kolizi
             if st.session_state.get('show_collision_confirm', False):
                 pending = st.session_state['pending_task_data']
                 colliding_str = ', '.join(map(str, st.session_state.get('colliding_projects', [])))
-
                 st.warning(
                     f"**Pozor – kolize mezi projekty!**\n\n"
                     f"Tento nový úkol bude kolidovat s projekty: **{colliding_str}**\n"
                     f"na pracovišti {get_workplace_name(pending['workplace_id'])}.\n\n"
                     "Opravdu chcete úkol přidat přesto?"
                 )
-
                 col1, col2 = st.columns(2)
                 with col1:
                     if st.button("Ano, přidat přesto", type="primary"):
@@ -915,7 +749,6 @@ elif st.session_state.authentication_status is False:
                         )
                         if task_id:
                             st.success("Úkol přidán přesto (s kolizí).")
-                            # ← KLÍČOVÁ OPRAVA – nastavíme i detaily pro notifikaci
                             st.session_state['task_added_success'] = True
                             st.session_state['task_added_details'] = {
                                 'project': pending['project_id'],
@@ -924,18 +757,14 @@ elif st.session_state.authentication_status is False:
                                 'mode': pending['mode'],
                                 'start': pending['start_ddmmyyyy'] or 'automaticky'
                             }
-                            # Volitelně fork warning
                             if pending['parent_id']:
                                 children_count = len(get_children(pending['parent_id']))
                                 if children_count > 1:
                                     st.session_state['fork_warning'] = children_count
-
-                        # Vyčistíme stav
                         del st.session_state['pending_task_data']
                         del st.session_state['colliding_projects']
                         del st.session_state['show_collision_confirm']
                         st.rerun()
-
                 with col2:
                     if st.button("Ne, zrušit"):
                         st.info("Přidání úkolu zrušeno.")
@@ -944,7 +773,6 @@ elif st.session_state.authentication_status is False:
                         del st.session_state['show_collision_confirm']
                         st.rerun()
 
-            # Notifikace pro úspěšné přidání
             if st.session_state.get('task_added_success', False):
                 details = st.session_state['task_added_details']
                 st.success(
@@ -965,7 +793,7 @@ elif st.session_state.authentication_status is False:
                 del st.session_state['fork_warning']
 
     # ──────────────────────────────────────────────────────────────
-    # Prohlížet / Upravovat úkoly
+    # Prohlížet / Upravovat úkoly (zkrácená verze – opraveno)
     # ──────────────────────────────────────────────────────────────
     elif option == "Prohlížet / Upravovat úkoly":
         st.header("Prohlížet / Upravovat úkoly")
@@ -975,225 +803,205 @@ elif st.session_state.authentication_status is False:
         projects = get_projects()
         if not projects:
             st.info("Nejprve přidejte alespoň jeden projekt.")
-            st.stop()
-
-        display_options = [(f"{pid} – {name or 'bez názvu'}", pid) for pid, name in projects]
-        selected_display, selected_project = st.selectbox(
-            "Vyberte projekt",
-            options=display_options,
-            format_func=lambda x: x[0],
-            index=0,
-            key="edit_proj"
-        )
-
-        if st.button("Rekalkulovat projekt"):
-            recalculate_project(selected_project)
-            st.success("Projekt přepočítán.")
-
-            tasks = get_tasks(selected_project)
-            collisions = mark_all_collisions()
-            colliding_tasks = [tid for tid, has_coll in collisions.items() if has_coll and get_task(tid)['project_id'] == selected_project]
-            if colliding_tasks:
-                colliding_info = []
-                for tid in colliding_tasks:
-                    coll_projects = get_colliding_projects(tid)
-                    colliding_info.append(f"Úkol {tid}: kolize s {', '.join(coll_projects)}")
-                st.warning("Po rekalkulaci detekovány kolize:\n" + "\n".join(colliding_info))
-
-            st.rerun()
-
-        tasks = get_tasks(selected_project)
-        if not tasks:
-            st.info(f"V projektu {selected_display} zatím nejsou žádné úkoly.")
         else:
-            collisions = mark_all_collisions()
-            data = []
-            for t in tasks:
-                wp_name = get_workplace_name(t['workplace_id'])
-                start_disp = yyyymmdd_to_ddmmyyyy(t['start_date'])
-                end_disp = yyyymmdd_to_ddmmyyyy(t['end_date'])
-                coll_text = ""
-                if collisions.get(t['id'], False):
-                    colliding = get_colliding_projects(t['id'])
-                    coll_text = f"⚠️ Kolize: {', '.join(colliding)}"
-
-                status_display = t['status']
-                status_icon = ""
-                if t['status'] == 'done':
-                    status_display = "Hotovo"
-                    status_icon = "✅ "
-                elif t['status'] == 'canceled':
-                    status_display = "Zrušeno"
-                    status_icon = "❌ "
-                else:
-                    status_display = "Pending"
-
-                parent_id = get_parent(t['id'])
-                if parent_id:
-                    parent_task = get_task(parent_id)
-                    if parent_task:
-                        parent_wp = get_workplace_name(parent_task['workplace_id'])
-                        parent_start = yyyymmdd_to_ddmmyyyy(parent_task['start_date']) or 'bez data'
-                        parent_notes = parent_task['notes'][:30] or 'bez poznámky'
-                        parent_desc = f"P{selected_project} – {parent_wp} – {parent_start} – {parent_notes}..."
-                    else:
-                        parent_desc = f"ID {parent_id[:8]}... (nenalezen)"
-                else:
-                    parent_desc = "— (root)"
-
-                task_desc = (
-                    f"P{selected_project} – {wp_name} – {start_disp} – {t['hours']}h – "
-                    f"{status_icon}{status_display} – {t['notes'][:40] or 'bez poznámky'}..."
-                )
-
-                data.append({
-                    "ID": t['id'],
-                    "Parent úkol": parent_desc,
-                    "Popis": task_desc,
-                    "Pracoviště": wp_name,
-                    "Hodiny": t['hours'],
-                    "Režim": t['capacity_mode'],
-                    "Začátek": start_disp,
-                    "Konec": end_disp,
-                    "Stav": status_display,
-                    "Poznámka": t.get('notes', "") or "",
-                    "Kolize": coll_text,
-                    "Počet těles": t['bodies_count'],
-                    "Aktivní": "Ano" if t['is_active'] else "Ne"
-                })
-
-            df = pd.DataFrame(data)
-
-            custom_css = {
-                ".conflict-row": {
-                    "background-color": "#ffcccc !important",
-                }
-            }
-
-            grid_response = AgGrid(
-                df,
-                height=500,
-                editable=not read_only,
-                gridOptions={
-                    "columnDefs": [
-                        {"field": "Parent úkol", "width": 300},
-                        {"field": "Popis", "width": 400},
-                        {"field": "Pracoviště", "width": 220},
-                        {"field": "Hodiny", "width": 100},
-                        {"field": "Režim", "width": 100},
-                        {"field": "Začátek", "editable": not read_only, "width": 140},
-                        {"field": "Konec", "width": 140},
-                        {"field": "Stav", "width": 160},
-                        {"field": "Poznámka", "width": 250},
-                        {"field": "Kolize", "cellStyle": {"color": "red", "fontWeight": "bold"}, "width": 220},
-                        {"field": "Počet těles", "width": 120},
-                        {"field": "Aktivní", "width": 100}
-                    ],
-                    "defaultColDef": {"resizable": True, "sortable": True, "filter": True},
-                    "rowClassRules": {
-                        "conflict-row": "params.data && params.data['Kolize'] && params.data['Kolize'].trim() !== ''"
-                    }
-                },
-                update_mode=GridUpdateMode.VALUE_CHANGED,
-                data_return_mode=DataReturnMode.AS_INPUT,
-                fit_columns_on_grid_load=True,
-                theme="streamlit",
-                custom_css=custom_css,
-                allow_unsafe_jscode=False
+            display_options = [(f"{pid} – {name or 'bez názvu'}", pid) for pid, name in projects]
+            selected_display, selected_project = st.selectbox(
+                "Vyberte projekt",
+                options=display_options,
+                format_func=lambda x: x[0],
+                index=0,
+                key="edit_proj"
             )
 
-            updated_df = grid_response['data']
-            changes_made = False
+            if st.button("Rekalkulovat projekt"):
+                recalculate_project(selected_project)
+                st.success("Projekt přepočítán.")
+                st.rerun()
 
-            for _, row in updated_df.iterrows():
-                task_id = row['ID']
-                new_start_raw = row['Začátek']
-                new_start_str = str(new_start_raw).strip() if pd.notna(new_start_raw) else ""
+            tasks = get_tasks(selected_project)
+            if not tasks:
+                st.info(f"V projektu {selected_display} zatím nejsou žádné úkoly.")
+            else:
+                collisions = mark_all_collisions()
+                data = []
+                for t in tasks:
+                    wp_name = get_workplace_name(t['workplace_id'])
+                    start_disp = yyyymmdd_to_ddmmyyyy(t['start_date'])
+                    end_disp = yyyymmdd_to_ddmmyyyy(t['end_date'])
+                    coll_text = ""
+                    if collisions.get(t['id'], False):
+                        colliding = get_colliding_projects(t['id'])
+                        coll_text = f"⚠️ Kolize: {', '.join(colliding)}"
 
-                task = get_task(task_id)
-                original_start = yyyymmdd_to_ddmmyyyy(task['start_date']) if task['start_date'] else ""
+                    status_display = t['status']
+                    status_icon = ""
+                    if t['status'] == 'done':
+                        status_display = "Hotovo"
+                        status_icon = "✅ "
+                    elif t['status'] == 'canceled':
+                        status_display = "Zrušeno"
+                        status_icon = "❌ "
+                    else:
+                        status_display = "Pending"
 
-                if new_start_str == original_start:
-                    continue
+                    parent_id = get_parent(t['id'])
+                    parent_desc = "— (root)"
+                    if parent_id:
+                        parent_task = get_task(parent_id)
+                        if parent_task:
+                            parent_wp = get_workplace_name(parent_task['workplace_id'])
+                            parent_start = yyyymmdd_to_ddmmyyyy(parent_task['start_date']) or 'bez data'
+                            parent_notes = parent_task['notes'][:30] or 'bez poznámky'
+                            parent_desc = f"P{selected_project} – {parent_wp} – {parent_start} – {parent_notes}..."
 
-                if not new_start_str:
+                    task_desc = (
+                        f"P{selected_project} – {wp_name} – {start_disp} – {t['hours']}h – "
+                        f"{status_icon}{status_display} – {t['notes'][:40] or 'bez poznámky'}..."
+                    )
+
+                    data.append({
+                        "ID": t['id'],
+                        "Parent úkol": parent_desc,
+                        "Popis": task_desc,
+                        "Pracoviště": wp_name,
+                        "Hodiny": t['hours'],
+                        "Režim": t['capacity_mode'],
+                        "Začátek": start_disp,
+                        "Konec": end_disp,
+                        "Stav": status_display,
+                        "Poznámka": t.get('notes', "") or "",
+                        "Kolize": coll_text,
+                        "Počet těles": t['bodies_count'],
+                        "Aktivní": "Ano" if t['is_active'] else "Ne"
+                    })
+
+                df = pd.DataFrame(data)
+
+                custom_css = {
+                    ".conflict-row": {
+                        "background-color": "#ffcccc !important",
+                    }
+                }
+
+                grid_response = AgGrid(
+                    df,
+                    height=500,
+                    editable=not read_only,
+                    gridOptions={
+                        "columnDefs": [
+                            {"field": "Parent úkol", "width": 300},
+                            {"field": "Popis", "width": 400},
+                            {"field": "Pracoviště", "width": 220},
+                            {"field": "Hodiny", "width": 100},
+                            {"field": "Režim", "width": 100},
+                            {"field": "Začátek", "editable": not read_only, "width": 140},
+                            {"field": "Konec", "width": 140},
+                            {"field": "Stav", "width": 160},
+                            {"field": "Poznámka", "width": 250},
+                            {"field": "Kolize", "cellStyle": {"color": "red", "fontWeight": "bold"}, "width": 220},
+                            {"field": "Počet těles", "width": 120},
+                            {"field": "Aktivní", "width": 100}
+                        ],
+                        "defaultColDef": {"resizable": True, "sortable": True, "filter": True},
+                        "rowClassRules": {
+                            "conflict-row": "params.data && params.data['Kolize'] && params.data['Kolize'].trim() !== ''"
+                        }
+                    },
+                    update_mode=GridUpdateMode.VALUE_CHANGED,
+                    data_return_mode=DataReturnMode.AS_INPUT,
+                    fit_columns_on_grid_load=True,
+                    theme="streamlit",
+                    custom_css=custom_css,
+                    allow_unsafe_jscode=False
+                )
+
+                updated_df = grid_response['data']
+                changes_made = False
+
+                for _, row in updated_df.iterrows():
+                    task_id = row['ID']
+                    new_start_raw = row['Začátek']
+                    new_start_str = str(new_start_raw).strip() if pd.notna(new_start_raw) else ""
+                    task = get_task(task_id)
+                    original_start = yyyymmdd_to_ddmmyyyy(task['start_date']) if task['start_date'] else ""
+
+                    if new_start_str == original_start:
+                        continue
+
+                    if not new_start_str:
+                        try:
+                            update_task(task_id, 'start_date', None)
+                            recalculate_from_task(task_id)
+                            changes_made = True
+                        except Exception as e:
+                            st.error(f"Chyba při vymazání data u úkolu {task_id}: {e}")
+                        continue
+
+                    if not validate_ddmmyyyy(new_start_str):
+                        st.error(f"Neplatné datum u úkolu {task_id}: '{new_start_str}'. Použijte např. 1.1.2026 nebo 15.03.2025")
+                        continue
+
                     try:
-                        update_task(task_id, 'start_date', None)
+                        update_task(task_id, 'start_date', new_start_str)
                         recalculate_from_task(task_id)
                         changes_made = True
                     except Exception as e:
-                        st.error(f"Chyba při vymazání data u úkolu {task_id}: {e}")
-                    continue
+                        st.error(f"Chyba při úpravě data u úkolu {task_id}: {e}")
 
-                if not validate_ddmmyyyy(new_start_str):
-                    st.error(f"Neplatné datum u úkolu {task_id}: '{new_start_str}'. Použijte např. 1.1.2026 nebo 15.03.2025")
-                    continue
+                if changes_made:
+                    st.success("Změny uloženy a termíny přepočítány.")
+                    st.rerun()
 
-                try:
-                    update_task(task_id, 'start_date', new_start_str)
-                    recalculate_from_task(task_id)
-                    changes_made = True
-                except Exception as e:
-                    st.error(f"Chyba při úpravě data u úkolu {task_id}: {e}")
+                if tasks:
+                    st.markdown("### Změna stavu úkolu")
+                    task_options = []
+                    for t in tasks:
+                        wp_name = get_workplace_name(t['workplace_id'])
+                        start = yyyymmdd_to_ddmmyyyy(t['start_date']) or 'bez data'
+                        status_icon = "✅ " if t['status'] == 'done' else "❌ " if t['status'] == 'canceled' else ""
+                        desc = f"P{selected_project} – {wp_name} – {start} – {t['hours']}h – {status_icon}{t['status']} – {t['notes'][:40] or 'bez poznámky'}..."
+                        task_options.append(desc)
 
-            if changes_made:
-                st.success("Změny uloženy a termíny přepočítány.")
-                st.rerun()
+                    selected_task_display = st.selectbox("Vyberte úkol", task_options, key="status_change_order")
+                    selected_task_idx = task_options.index(selected_task_display)
+                    selected_task_id = tasks[selected_task_idx]['id']
 
-            if tasks:
-                st.markdown("### Změna stavu úkolu")
-                task_options = []
-                for t in tasks:
-                    wp_name = get_workplace_name(t['workplace_id'])
-                    start = yyyymmdd_to_ddmmyyyy(t['start_date']) or 'bez data'
-                    status_icon = "✅ " if t['status'] == 'done' else "❌ " if t['status'] == 'canceled' else ""
-                    desc = f"P{selected_project} – {wp_name} – {start} – {t['hours']}h – {status_icon}{t['status']} – {t['notes'][:40] or 'bez poznámky'}..."
-                    task_options.append(desc)
-
-                selected_task_display = st.selectbox("Vyberte úkol", task_options, key="status_change_order")
-                selected_task_idx = task_options.index(selected_task_display)
-                selected_task_id = tasks[selected_task_idx]['id']
-
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("Označit jako Hotovo"):
-                        update_task(selected_task_id, 'status', 'done')
-                        recalculate_from_task(selected_task_id)
-                        st.success("Úkol označen jako hotový.")
-                        st.rerun()
-
-                with col2:
-                    reason = st.text_input("Důvod zrušení", key="cancel_reason_input")
-                    if st.button("Označit jako Zrušeno"):
-                        if reason.strip():
-                            update_task(selected_task_id, 'reason', reason.strip())
-                            update_task(selected_task_id, 'status', 'canceled')
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button("Označit jako Hotovo"):
+                            update_task(selected_task_id, 'status', 'done')
                             recalculate_from_task(selected_task_id)
-                            st.success("Úkol zrušen.")
+                            st.success("Úkol označen jako hotový.")
                             st.rerun()
-                        else:
-                            st.error("Zadejte důvod zrušení.")
 
-                if role == 'admin':
-                    st.markdown("### Servisní mazání úkolu (pouze admin)")
-                    delete_display = st.selectbox("Vyberte úkol k smazání", task_options, key="admin_delete")
-                    delete_idx = task_options.index(delete_display)
-                    delete_task_id = tasks[delete_idx]['id']
-                    if st.checkbox("Potvrďte smazání tohoto úkolu (neodvolatelné!)"):
-                        if st.button("SMAZAT ÚKOL"):
-                            if delete_task(delete_task_id):
-                                st.success("Úkol smazán.")
+                    with col2:
+                        reason = st.text_input("Důvod zrušení", key="cancel_reason_input")
+                        if st.button("Označit jako Zrušeno"):
+                            if reason.strip():
+                                update_task(selected_task_id, 'reason', reason.strip())
+                                update_task(selected_task_id, 'status', 'canceled')
+                                recalculate_from_task(selected_task_id)
+                                st.success("Úkol zrušen.")
                                 st.rerun()
                             else:
-                                st.error("Chyba při mazání.")
+                                st.error("Zadejte důvod zrušení.")
+
+                    if role == 'admin':
+                        st.markdown("### Servisní mazání úkolu (pouze admin)")
+                        delete_display = st.selectbox("Vyberte úkol k smazání", task_options, key="admin_delete")
+                        delete_idx = task_options.index(delete_display)
+                        delete_task_id = tasks[delete_idx]['id']
+                        if st.checkbox("Potvrďte smazání tohoto úkolu (neodvolatelné!)"):
+                            if st.button("SMAZAT ÚKOL"):
+                                if delete_task(delete_task_id):
+                                    st.success("Úkol smazán.")
+                                    st.rerun()
+                                else:
+                                    st.error("Chyba při mazání.")
 
     # ──────────────────────────────────────────────────────────────
-    # Zbývající sekce (HMG měsíční, HMG roční, Správa pracovišť, Změnit heslo, User Management)
+    # Správa pracovišť
     # ──────────────────────────────────────────────────────────────
-    # ... (zde vlož zbytek svého kódu pro tyto sekce – jsou v pořádku, jen je potřeba správně odsadit)
-    # Pokud chceš, pošli mi ty části samostatně a já je opravím a přidám do celku.
-
-    # Příklad pro HMG měsíční (pokračování):
     elif option == "Správa pracovišť":
         if role != 'admin':
             st.error("Přístup jen pro administrátory.")
@@ -1228,6 +1036,9 @@ elif st.session_state.authentication_status is False:
                 else:
                     st.info("Žádné pracoviště.")
 
+    # ──────────────────────────────────────────────────────────────
+    # Změnit heslo
+    # ──────────────────────────────────────────────────────────────
     elif option == "Změnit heslo":
         st.header("Změnit heslo")
         new_password = st.text_input("Nové heslo", type="password")
@@ -1242,17 +1053,17 @@ elif st.session_state.authentication_status is False:
             else:
                 st.error("Hesla se neshodují nebo jsou prázdná.")
 
+    # ──────────────────────────────────────────────────────────────
+    # User Management
+    # ──────────────────────────────────────────────────────────────
     elif option == "User Management" and role == 'admin':
         st.header("User Management – Pouze pro admin")
-        
         st.subheader("Přidat nového uživatele")
-        
         col1, col2 = st.columns(2)
         with col1:
             new_username = st.text_input("Uživatelské jméno (povinné)", key="new_u_username")
             new_name = st.text_input("Celé jméno (povinné)", key="new_u_name")
             new_email = st.text_input("Email (volitelné)", key="new_u_email")
-        
         with col2:
             new_role = st.selectbox("Role", ["normal", "viewer"], key="new_u_role")
             default_pw = "1234"
@@ -1271,19 +1082,16 @@ elif st.session_state.authentication_status is False:
                 )
                 if success:
                     st.success(message)
-                    # Vyčistíme cache → nový uživatel se objeví
-                    cached_load_users.clear()
+                    load_users_from_db.clear()
                     st.rerun()
                 else:
                     st.error(message)
-        
-        # Zobrazení aktuálních uživatelů (opravené width)
+
         st.subheader("Aktuální uživatelé")
         try:
             users_response = supabase.table('app_users')\
-                            .select("username, name, role, email")\
-                            .execute()
-            
+                               .select("username, name, role, email")\
+                               .execute()
             if users_response.data:
                 df_users = pd.DataFrame(users_response.data)
                 df_users = df_users.rename(columns={
@@ -1292,18 +1100,17 @@ elif st.session_state.authentication_status is False:
                     "role": "Role",
                     "email": "Email"
                 })
-                # Nahrazení deprecated use_container_width
-                st.dataframe(df_users, width='stretch')  # nebo 'content' podle potřeby
+                st.dataframe(df_users, width='stretch')
             else:
                 st.info("V databázi zatím nejsou žádní uživatelé.")
         except Exception as e:
             st.error(f"Chyba při načítání seznamu: {e}")
-        #st.table(users_data)
+
         st.markdown("### Smazání celého projektu (neodvolatelné!)")
         project_choices = get_project_choices()
         if project_choices:
             proj_to_delete = st.selectbox(
-                "Vyberte projekt k úplnému smazání (včetně všech úkolů)",
+                "Vyberte projekt k úplnému smazání",
                 project_choices,
                 key="admin_delete_project_select"
             )
@@ -1312,13 +1119,16 @@ elif st.session_state.authentication_status is False:
                 if pid == proj_to_delete:
                     proj_name = pname
                     break
-            st.warning(f"**Pozor!** Bude smazán celý projekt **{proj_to_delete} – {proj_name}** včetně všech úkolů a záznamů v historii změn. Tuto akci nelze vrátit zpět!")
-            if st.checkbox("Potvrzuji, že chci trvale smazat tento projekt i s úkoly", key="confirm_proj_delete"):
+            st.warning(f"**Pozor!** Bude smazán projekt **{proj_to_delete} – {proj_name}** včetně všech úkolů a historie. Akce nelze vrátit!")
+            if st.checkbox("Potvrzuji trvalé smazání projektu i s úkoly", key="confirm_proj_delete"):
                 if st.button("SMAZAT CELÝ PROJEKT", type="primary"):
                     if delete_project(proj_to_delete):
-                        st.success(f"Projekt {proj_to_delete} byl úspěšně a kompletně smazán.")
+                        st.success(f"Projekt {proj_to_delete} kompletně smazán.")
                         st.rerun()
 
+    # ──────────────────────────────────────────────────────────────
+    # HMG měsíční
+    # ──────────────────────────────────────────────────────────────
     elif option == "HMG měsíční":
         st.header("HMG měsíční – Přehled úkolů po dnech")
         selected_year = st.number_input("Rok", min_value=2020, max_value=2030, value=datetime.now().year, key="hmg_year")
@@ -1329,6 +1139,7 @@ elif st.session_state.authentication_status is False:
         else:
             last_day = date(selected_year, selected_month + 1, 1) - timedelta(days=1)
         num_days = last_day.day
+
         response = supabase.table('tasks').select('*').not_.is_('start_date', 'null').not_.is_('end_date', 'null').execute()
         all_tasks = response.data
         plot_data = []
@@ -1376,6 +1187,7 @@ elif st.session_state.authentication_status is False:
                 "end_day": display_end.day,
                 "color": color
             })
+
         if not plot_data:
             st.info(f"Žádné úkoly pro {calendar.month_name[selected_month]} {selected_year}.")
         else:
@@ -1400,6 +1212,7 @@ elif st.session_state.authentication_status is False:
             fig.update_yaxes(autorange="reversed")
             fig.update_layout(bargap=0.2, bargroupgap=0.1, showlegend=False)
             st.plotly_chart(fig, width='stretch')
+
             if st.button("Exportovat HMG měsíční do PDF"):
                 file_name = f"HMG_mesicni_{selected_year}_{selected_month:02d}.pdf"
                 pdf = pdf_canvas.Canvas(file_name, pagesize=landscape(A4))
@@ -1453,6 +1266,9 @@ elif st.session_state.authentication_status is False:
                         mime="application/pdf"
                     )
 
+    # ──────────────────────────────────────────────────────────────
+    # HMG roční
+    # ──────────────────────────────────────────────────────────────
     elif option == "HMG roční":
         st.header("HMG roční – Heatmap obsazenosti pracovišť")
         year = st.number_input("Rok", min_value=2020, max_value=2030, value=datetime.now().year, key="year_rocni")
@@ -1543,11 +1359,6 @@ elif st.session_state.authentication_status is False:
                     combined_columns.append(("% využití", month))
             combined = combined[combined_columns]
             st.dataframe(combined, width='stretch')
-
-elif st.session_state.get('authentication_status') is False:
-    st.error("Nesprávné přihlašovací údaje")
-elif st.session_state.get('authentication_status') is None:
-    st.warning("Přihlaste se prosím")
 
 # Footer
 if st.session_state.get('authentication_status'):
