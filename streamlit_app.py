@@ -67,9 +67,16 @@ cookie_config = {
 # Inicializace autentizátoru z DB dat
 authenticator = Authenticate(
     credentials,
-    cookie_config['name'],
-    cookie_config['key'],
-    cookie_config['expiry_days']
+    cookie_name=cookie_config['name'],
+    key=cookie_config['key'],
+    cookie_expiry_days=cookie_config['expiry_days'],
+    preauthorized=None,                  # pokud nepoužíváš
+    validator=None,
+    # Tady je důležité:
+    location='main',                     # nebo 'sidebar' podle tvého layoutu
+    # Nebo ještě lepší - explicitní unikátní klíč pro cookie manager:
+    # (tohle řeší 90 % případů)
+    cookie_manager_key="planner_cookie_manager_unique"   # ← přidej toto
 )
 # Registrace fontu pro PDF
 try:
