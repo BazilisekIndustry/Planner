@@ -33,7 +33,8 @@ def load_users_from_db():
                    .execute()
         
         if not response.data:
-            return {"usernames": {}}, "V databázi nejsou žádní uživatelé!"
+            st.warning("V databázi nejsou žádné uživatelé!")
+            return {"usernames": {}}   # ← musí být s "usernames"
         
         users_dict = {}
         for row in response.data:
@@ -45,10 +46,11 @@ def load_users_from_db():
             if row.get('email'):
                 users_dict[row['username']]['email'] = row['email']
                 
-        return {"usernames": users_dict}, None
+        return {"usernames": users_dict}
     
     except Exception as e:
-        return {"usernames": {}}, f"Chyba při načítání uživatelů: {str(e)}"
+        st.error(f"Chyba při načítání uživatelů: {str(e)}")
+        return {"usernames": {}}
 
 
 # Načtení dat + zobrazení případných problémů
@@ -59,6 +61,16 @@ if load_error:
         st.warning(load_error)
     else:
         st.error(load_error)
+st.write("Typ credentials:", type(credentials))
+st.write("Klíče v credentials:", list(credentials.keys()) if isinstance(credentials, dict) else "není dict")
+
+authenticator = Authenticate(
+    credentials,                           # ← musí obsahovat "usernames"
+    cookie_name='planner_auth_cookie',
+    key='planner_streamlit_secret_key',
+    cookie_expiry_days=30,
+    location='main'
+)
 
 
 # Cookie config (ideálně z secrets)
@@ -74,14 +86,17 @@ cookie_config = {
 def get_authenticator(creds):
     return Authenticate(
         creds,
-        cookie_name=cookie_config['name'],
-        key=cookie_config['key'],
-        cookie_expiry_days=cookie_config['expiry_days'],
+        cookie_name='planner_auth_cookie',
+        key='planner_streamlit_secret_key',
+        cookie_expiry_days=30,
         location='main'
     )
 
-# Použijeme credentials, které jsme už načetli
-authenticator = get_authenticator(credentials)
+# Použití – ideálně jen jednou na začátku
+if 'authenticator' not in st.session_state:
+    st.session_state.authenticator = get_authenticator(credentials)
+
+authenticator = st.session_state.authenticator
 # Registrace fontu pro PDF
 try:
     pdfmetrics.registerFont(TTFont('DejaVu', 'DejaVuSans.ttf'))
