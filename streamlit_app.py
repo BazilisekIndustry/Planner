@@ -27,7 +27,7 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Načítání uživatelů z databáze (bez cache, bez widgetů uvnitř funkce)
 def load_users_from_db():
-    """Vrátí pouze credentials slovník pro Authenticate – bez st.* příkazů"""
+    """Načte uživatele z DB – bez widgetů uvnitř"""
     try:
         response = supabase.table('app_users')\
                    .select("username, name, password_hash, role, email")\
@@ -37,7 +37,7 @@ def load_users_from_db():
         for row in response.data:
             users_dict[row['username']] = {
                 'name': row['name'],
-                'password': row['password_hash'],      # bcrypt hash
+                'password': row['password_hash'],
                 'role': row.get('role', 'viewer'),
             }
             if row.get('email'):
@@ -46,24 +46,29 @@ def load_users_from_db():
         return {"usernames": users_dict}
     
     except Exception as e:
-        # Log do konzole / server logů, ne na stránku
-        print(f"[ERROR] Chyba při načítání uživatelů z DB: {str(e)}")
+        print(f"[ERROR] Načítání uživatelů selhalo: {str(e)}")
         return {"usernames": {}}
 
 
-# Načteme credentials jednou
-credentials = load_users_from_db()
+# Cachovaná verze načítání (pro .clear())
+@st.cache_data(ttl=600)  # 10 minut – dostatečně dlouho, ale obnoví se při změně
+def cached_load_users():
+    return load_users_from_db()
 
-# Pokud je prázdný → varování na stránce (mimo funkci)
+
+credentials = cached_load_users()
+
 if not credentials.get("usernames", {}):
-    st.warning("V databázi nejsou žádní uživatelé nebo došlo k chybě při načítání.")
+    st.warning("V databázi nejsou žádní uživatelé nebo chyba při načítání.")
 
-# Cookie konfigurace (nejlépe ze secrets)
+
+# Cookie config
 COOKIE_NAME = 'planner_auth_cookie'
-COOKIE_KEY = st.secrets.get("cookie_key", 'planner_streamlit_secret_key')  # fallback
+COOKIE_KEY = st.secrets.get("cookie_key", "planner_streamlit_secret_key")
 COOKIE_EXPIRY_DAYS = 30
 
-# Cachovaný authenticator (nejlepší praxe – jednou za session)
+
+# Jediná správná inicializace Authenticate
 @st.cache_resource
 def get_authenticator(creds):
     return Authenticate(
@@ -71,15 +76,23 @@ def get_authenticator(creds):
         cookie_name=COOKIE_NAME,
         key=COOKIE_KEY,
         cookie_expiry_days=COOKIE_EXPIRY_DAYS,
-        location='main'  # nebo 'sidebar' podle potřeby
+        location='main'
     )
 
 
-# Použití přes session_state (eliminuje duplicitní inicializace a varování)
+# Použij session_state → zabrání duplicitním elementům při rerun
 if 'authenticator' not in st.session_state:
     st.session_state.authenticator = get_authenticator(credentials)
 
 authenticator = st.session_state.authenticator
+
+# Login
+authenticator.login(location='main')
+
+if st.session_state.get('authentication_status'):
+    username = st.session_state['username']
+    role = st.session_state.authenticator.credentials["usernames"][username].get('role', 'viewer')
+    name = st.session_state['name']
 # Registrace fontu pro PDF
 try:
     pdfmetrics.registerFont(TTFont('DejaVu', 'DejaVuSans.ttf'))
@@ -1212,12 +1225,12 @@ if st.session_state.get('authentication_status'):
         with col1:
             new_username = st.text_input("Uživatelské jméno (povinné)", key="new_u_username")
             new_name = st.text_input("Celé jméno (povinné)", key="new_u_name")
-            new_email = st.text_input("Email (volitelné – pro budoucí notifikace)", key="new_u_email")
+            new_email = st.text_input("Email (volitelné)", key="new_u_email")
         
         with col2:
             new_role = st.selectbox("Role", ["normal", "viewer"], key="new_u_role")
             default_pw = "1234"
-            st.info(f"Výchozí heslo bude: **{default_pw}** (uživatel by ho měl hned změnit)")
+            st.info(f"Výchozí heslo: **{default_pw}** (uživatel by ho měl ihned změnit)")
 
         if st.button("Přidat uživatele"):
             if not new_username.strip() or not new_name.strip():
@@ -1232,13 +1245,13 @@ if st.session_state.get('authentication_status'):
                 )
                 if success:
                     st.success(message)
-                    # Vyčistíme cache, aby se nový uživatel objevil při příštím načtení
-                    load_users_from_db.clear()
+                    # Vyčistíme cache → nový uživatel se objeví
+                    cached_load_users.clear()
                     st.rerun()
                 else:
                     st.error(message)
         
-        # Zobrazení aktuálních uživatelů
+        # Zobrazení aktuálních uživatelů (opravené width)
         st.subheader("Aktuální uživatelé")
         try:
             users_response = supabase.table('app_users')\
@@ -1253,11 +1266,12 @@ if st.session_state.get('authentication_status'):
                     "role": "Role",
                     "email": "Email"
                 })
-                st.dataframe(df_users, use_container_width=True)
+                # Nahrazení deprecated use_container_width
+                st.dataframe(df_users, width='stretch')  # nebo 'content' podle potřeby
             else:
                 st.info("V databázi zatím nejsou žádní uživatelé.")
         except Exception as e:
-            st.error(f"Chyba při načítání seznamu uživatelů: {e}")
+            st.error(f"Chyba při načítání seznamu: {e}")
         #st.table(users_data)
         st.markdown("### Smazání celého projektu (neodvolatelné!)")
         project_choices = get_project_choices()
