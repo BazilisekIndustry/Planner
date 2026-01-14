@@ -488,33 +488,45 @@ def get_user_count():
 
 
 def add_user(username, name, password, role, email=""):
-    if get_user_count() >= 6 and role != 'admin':
-        return False, "Maximální počet uživatelů (5 + admin) dosažen."
-    
-    with open(USERS_FILE, 'r', encoding='utf-8') as f:
-        config = yaml.safe_load(f)
-    
-    if username in config['credentials']['usernames']:
-        return False, "Uživatel již existuje."
-    
-    # Hash hesla (použijeme static metodu)
-    hashed_pw = Hasher.hash(password)
-    
-    user_data = {
-        'name': name,
-        'password': hashed_pw,
-        'role': role
-    }
-    if email.strip():  # ukládáme jen pokud něco zadali
-        user_data['email'] = email.strip()
-    
-    config['credentials']['usernames'][username] = user_data
-    
-    with open(USERS_FILE, 'w', encoding='utf-8') as f:
-        yaml.dump(config, f, default_flow_style=False, allow_unicode=True)
-    
-    return True, "Uživatel přidán."
+    """
+    Přidá nového uživatele do Supabase tabulky app_users.
+    Vrátí (success: bool, message: str)
+    """
+    # Kontrola maximálního počtu uživatelů (volitelné omezení, můžeš odstranit)
+    try:
+        count_response = supabase.table('app_users').select("count", count="exact").execute()
+        user_count = count_response.count
+        if user_count >= 6 and role != 'admin':
+            return False, "Maximální počet uživatelů (5 + admin) dosažen."
+    except Exception as e:
+        return False, f"Chyba při kontrole počtu uživatelů: {e}"
 
+    # Kontrola, zda uživatel již existuje
+    check = supabase.table('app_users').select("username").eq("username", username).execute()
+    if check.data:
+        return False, "Uživatel s tímto uživatelským jménem již existuje."
+
+    # Hash hesla (výchozí heslo bude '1234', pokud není zadáno jiné)
+    hashed_pw = Hasher.hash(password)
+
+    data = {
+        "username": username,
+        "name": name,
+        "password_hash": hashed_pw,
+        "role": role,
+    }
+
+    if email.strip():
+        data["email"] = email.strip()
+
+    try:
+        response = supabase.table('app_users').insert(data).execute()
+        if response.data:
+            return True, "Uživatel úspěšně přidán do databáze."
+        else:
+            return False, "Nepodařilo se vložit uživatele (neznámá chyba)."
+    except Exception as e:
+        return False, f"Chyba při vkládání do databáze: {str(e)}"
 
 def reset_password(username, new_password='1234'):
     with open(USERS_FILE, 'r', encoding='utf-8') as f:
@@ -1184,38 +1196,60 @@ if st.session_state.get('authentication_status'):
 
     elif option == "User Management" and role == 'admin':
         st.header("User Management – Pouze pro admin")
+        
         st.subheader("Přidat nového uživatele")
-        new_username = st.text_input("Uživatelské jméno (povinné)")
-        new_name = st.text_input("Jméno (povinné)")
-        new_role = st.selectbox("Role", ["normal", "viewer"])
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            new_username = st.text_input("Uživatelské jméno (povinné)", key="new_u_username")
+            new_name = st.text_input("Celé jméno (povinné)", key="new_u_name")
+            new_email = st.text_input("Email (volitelné – pro budoucí notifikace)", key="new_u_email")
+        
+        with col2:
+            new_role = st.selectbox("Role", ["normal", "viewer"], key="new_u_role")
+            default_pw = "1234"
+            st.info(f"Výchozí heslo bude: **{default_pw}** (uživatel by ho měl hned změnit)")
+
         if st.button("Přidat uživatele"):
-            if new_username.strip() and new_name.strip():
-                success, message = add_user(new_username.strip(), new_name.strip(), '1234', new_role)
+            if not new_username.strip() or not new_name.strip():
+                st.error("Uživatelské jméno a celé jméno jsou povinné.")
+            else:
+                success, message = add_user(
+                    username=new_username.strip(),
+                    name=new_name.strip(),
+                    password=default_pw,
+                    role=new_role,
+                    email=new_email.strip()
+                )
                 if success:
                     st.success(message)
+                    # Vyčistíme cache, aby se nový uživatel objevil při příštím načtení
+                    load_users_from_db.clear()
                     st.rerun()
                 else:
                     st.error(message)
-            else:
-                st.error("Zadejte jméno a uživatelské jméno.")
-        st.subheader("Resetovat heslo uživatele")
-        users = list(config['credentials']['usernames'].keys())
-        reset_username = st.selectbox("Vyberte uživatele", users, key="reset_user")
-        if st.button("Resetovat heslo na 1234"):
-            success, message = reset_password(reset_username)
-            if success:
-                st.success(message)
-            else:
-                st.error(message)
+        
+        # Zobrazení aktuálních uživatelů
         st.subheader("Aktuální uživatelé")
-        users_data = []
-        for u, details in config['credentials']['usernames'].items():
-            users_data.append({
-                "Uživatelské jméno": u,
-                "Jméno": details.get('name'),
-                "Role": details.get('role', 'viewer')
-            })
-        st.table(users_data)
+        try:
+            users_response = supabase.table('app_users')\
+                            .select("username, name, role, email")\
+                            .execute()
+            
+            if users_response.data:
+                df_users = pd.DataFrame(users_response.data)
+                df_users = df_users.rename(columns={
+                    "username": "Uživatelské jméno",
+                    "name": "Jméno",
+                    "role": "Role",
+                    "email": "Email"
+                })
+                st.dataframe(df_users, use_container_width=True)
+            else:
+                st.info("V databázi zatím nejsou žádní uživatelé.")
+        except Exception as e:
+            st.error(f"Chyba při načítání seznamu uživatelů: {e}")
+        #st.table(users_data)
         st.markdown("### Smazání celého projektu (neodvolatelné!)")
         project_choices = get_project_choices()
         if project_choices:
