@@ -29,6 +29,9 @@ COOKIE_NAME = 'planner_auth_cookie'
 COOKIE_KEY = st.secrets.get("cookie_key", "planner_streamlit_secret_key")  # fallback
 COOKIE_EXPIRY_DAYS = 30
 
+if 'logout' not in st.session_state:
+    st.session_state['logout'] = False
+
 # Načítání uživatelů z databáze (bez cache, bez widgetů uvnitř funkce)
 @st.cache_data(ttl=600)  # 10 minut cache – dostatečné pro malý počet uživatelů
 def load_users_from_db():
@@ -57,13 +60,6 @@ credentials = load_users_from_db()
 
 if not credentials.get("usernames", {}):
     st.warning("V databázi nejsou žádní uživatelé nebo došlo k chybě při načítání.")
-
-
-# Cookie config
-COOKIE_NAME = 'planner_auth_cookie'
-COOKIE_KEY = st.secrets.get("cookie_key", "planner_streamlit_secret_key")
-COOKIE_EXPIRY_DAYS = 30
-
 
 @st.cache_resource
 def create_authenticator():
