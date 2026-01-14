@@ -20,79 +20,62 @@ from streamlit_authenticator.utilities.hasher import Hasher
 # ============================
 # KONFIGURACE
 # ============================
-USERS_FILE = 'users.yaml'
+USERS_FILE = 'users.yaml'  # už jen pro případné legacy části, jinak nepoužíváme
 SUPABASE_URL = st.secrets["supabase_url"]
 SUPABASE_KEY = st.secrets["supabase_key"]
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+# Načítání uživatelů z databáze (bez cache, bez widgetů uvnitř funkce)
 def load_users_from_db():
-    """Načte uživatele z DB – bez cachování a bez widgetů uvnitř"""
+    """Vrátí pouze credentials slovník pro Authenticate – bez st.* příkazů"""
     try:
         response = supabase.table('app_users')\
                    .select("username, name, password_hash, role, email")\
                    .execute()
         
-        if not response.data:
-            st.warning("V databázi nejsou žádné uživatelé!")
-            return {"usernames": {}}   # ← musí být s "usernames"
-        
         users_dict = {}
         for row in response.data:
             users_dict[row['username']] = {
                 'name': row['name'],
-                'password': row['password_hash'],
+                'password': row['password_hash'],      # bcrypt hash
                 'role': row.get('role', 'viewer'),
             }
             if row.get('email'):
                 users_dict[row['username']]['email'] = row['email']
-                
+        
         return {"usernames": users_dict}
     
     except Exception as e:
-        st.error(f"Chyba při načítání uživatelů: {str(e)}")
+        # Log do konzole / server logů, ne na stránku
+        print(f"[ERROR] Chyba při načítání uživatelů z DB: {str(e)}")
         return {"usernames": {}}
 
 
-# Načtení dat + zobrazení případných problémů
-credentials, load_error = load_users_from_db()
+# Načteme credentials jednou
+credentials = load_users_from_db()
 
-if load_error:
-    if "nejsou žádní uživatelé" in load_error:
-        st.warning(load_error)
-    else:
-        st.error(load_error)
-st.write("Typ credentials:", type(credentials))
-st.write("Klíče v credentials:", list(credentials.keys()) if isinstance(credentials, dict) else "není dict")
+# Pokud je prázdný → varování na stránce (mimo funkci)
+if not credentials.get("usernames", {}):
+    st.warning("V databázi nejsou žádní uživatelé nebo došlo k chybě při načítání.")
 
-authenticator = Authenticate(
-    credentials,                           # ← musí obsahovat "usernames"
-    cookie_name='planner_auth_cookie',
-    key='planner_streamlit_secret_key',
-    cookie_expiry_days=30,
-    location='main'
-)
+# Cookie konfigurace (nejlépe ze secrets)
+COOKIE_NAME = 'planner_auth_cookie'
+COOKIE_KEY = st.secrets.get("cookie_key", 'planner_streamlit_secret_key')  # fallback
+COOKIE_EXPIRY_DAYS = 30
 
-
-# Cookie config (ideálně z secrets)
-cookie_config = {
-    'name': 'planner_auth_cookie',
-    'key': 'planner_streamlit_secret_key',  # ← lepší ze st.secrets["cookie_key"] !
-    'expiry_days': 30,
-}
-
-
-# Authenticator cachovaný – bez widgetů, takže OK
+# Cachovaný authenticator (nejlepší praxe – jednou za session)
 @st.cache_resource
 def get_authenticator(creds):
     return Authenticate(
         creds,
-        cookie_name='planner_auth_cookie',
-        key='planner_streamlit_secret_key',
-        cookie_expiry_days=30,
-        location='main'
+        cookie_name=COOKIE_NAME,
+        key=COOKIE_KEY,
+        cookie_expiry_days=COOKIE_EXPIRY_DAYS,
+        location='main'  # nebo 'sidebar' podle potřeby
     )
 
-# Použití – ideálně jen jednou na začátku
+
+# Použití přes session_state (eliminuje duplicitní inicializace a varování)
 if 'authenticator' not in st.session_state:
     st.session_state.authenticator = get_authenticator(credentials)
 
