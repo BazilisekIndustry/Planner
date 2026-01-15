@@ -31,6 +31,22 @@ COOKIE_EXPIRY_DAYS = 30
 if 'logout' not in st.session_state:
     st.session_state['logout'] = False
 
+# Pomocná funkce pro hashování jednoho hesla (verze 0.4.2+)
+def hash_single_password(plain_password: str) -> str:
+    """
+    Vytvoří správný bcrypt hash pro jedno heslo pomocí Hasher.hash_passwords
+    """
+    temp_credentials = {
+        "usernames": {
+            "temp_user": {
+                "name": "Temp",
+                "password": plain_password
+            }
+        }
+    }
+    Hasher.hash_passwords(temp_credentials)
+    return temp_credentials["usernames"]["temp_user"]["password"]
+
 # Načítání uživatelů z databáze (cachované, bez widgetů uvnitř)
 @st.cache_data(ttl=600)  # 10 minut – dostatečně dlouho
 def load_users_from_db():
@@ -70,7 +86,8 @@ def create_authenticator():
         cookie_name=COOKIE_NAME,
         key=COOKIE_KEY,
         cookie_expiry_days=COOKIE_EXPIRY_DAYS,
-        location='main'
+        location='main',
+        auto_hash=True                  # ← explicitně – default, ale pro jistotu
     )
 
 if 'authenticator' not in st.session_state:
@@ -88,8 +105,6 @@ st.set_page_config(
     layout="wide"
 )
 st.title("Plánovač Horkých komor CVŘ")
-
-
 
 # ──────────────────────────────────────────────────────────────
 # LOGIN – jen jednou, pokud není stav rozhodnut
@@ -111,6 +126,7 @@ except Exception:
 # ============================
 # ČESKÉ SVÁTKY A POMOCNÉ FUNKCE
 # ============================
+# ... (zde zůstávají všechny původní funkce beze změny - get_easter, get_holidays, is_holiday, ... až po recalculate_project)
 def get_easter(year):
     a = year % 19
     b = year // 100
@@ -215,10 +231,10 @@ def get_next_working_day_after(date_str, capacity_mode):
     while not is_working_day(current, capacity_mode):
         current += timedelta(days=1)
     return current.strftime('%Y-%m-%d')
-
 # ============================
 # DATABÁZOVÉ FUNKCE
 # ============================
+# ... (zde zůstávají všechny původní funkce beze změny - init_db až po delete_project)
 def init_db():
     pass
 
@@ -459,7 +475,9 @@ def add_user(username, name, password, role, email=""):
     if check.data:
         return False, "Uživatel s tímto uživatelským jménem již existuje."
 
-    hashed_pw = Hasher.hash(password)
+    # Správné hashování pro verzi 0.4.2
+    hashed_pw = hash_single_password(password)
+
     data = {
         "username": username,
         "name": name,
@@ -479,8 +497,11 @@ def add_user(username, name, password, role, email=""):
     except Exception as e:
         return False, f"Chyba při vkládání: {str(e)}"
 
+
 def reset_password(username, new_password='1234'):
-    hashed_pw = Hasher.hash(new_password)
+    # Správné hashování pro verzi 0.4.2
+    hashed_pw = hash_single_password(new_password)
+    
     try:
         response = supabase.table('app_users')\
                    .update({"password_hash": hashed_pw})\
@@ -494,8 +515,11 @@ def reset_password(username, new_password='1234'):
     except Exception as e:
         return False, f"Chyba při resetu hesla: {str(e)}"
 
+
 def change_password(username, new_password):
-    hashed_pw = Hasher.hash(new_password)
+    # Správné hashování pro verzi 0.4.2
+    hashed_pw = hash_single_password(new_password)
+    
     try:
         response = supabase.table('app_users')\
                    .update({"password_hash": hashed_pw})\
@@ -513,35 +537,46 @@ def change_password(username, new_password):
 # HLAVNÍ APLIKACE
 # ============================
 
-
-# Zpracování stavu po loginu
+# ... (zbytek kódu zůstává beze změny - zpracování loginu, sidebar, jednotlivé sekce jako "Přidat projekt / úkol", "Prohlížet / Upravovat úkoly", atd. až po konec souboru)
 if st.session_state.get('authentication_status'):
-    username = st.session_state['username']
-    name = st.session_state['name']
+    username = st.session_state.get('username', 'neznámý')
+    name = st.session_state.get('name', 'Uživatel')
 
-    # Role získáme z uložených dat v session_state (knihovna je tam má po loginu)
-    # Bezpečnější než přístup k interním atributům
-    role = st.session_state.get('role', 'viewer')  # fallback na viewer
+    # Role – snažíme se použít hodnotu z authenticatoru (nejčastěji tam je)
+    role = st.session_state.get('role', None)
 
-    # Pokud role není v session_state, můžeme ji jednorázově načíst z DB
-    if role == 'viewer' and 'role' not in st.session_state:
+    # Pokud role v session_state není → jednorázově z DB
+    if role is None:
         try:
-            user_data = supabase.table('app_users')\
-                        .select('role')\
-                        .eq('username', username)\
-                        .execute().data
-            if user_data:
-                role = user_data[0]['role']
-                st.session_state['role'] = role  # uložíme pro příště
-        except:
-            pass  # pokud selže → zůstane viewer
+            response = supabase.table('app_users')\
+                       .select('role')\
+                       .eq('username', username)\
+                       .execute()
+            
+            if response.data:
+                role = response.data[0]['role']
+                st.session_state['role'] = role
+            else:
+                role = 'viewer'  # fallback, když uživatel v DB neexistuje (divný stav)
+                st.session_state['role'] = role
+                st.warning("Role uživatele nebyla nalezena v databázi – použit viewer režim")
+                
+        except Exception as e:
+            st.error(f"Chyba při načítání role z databáze: {e}")
+            role = 'viewer'
+            st.session_state['role'] = role
 
-    st.sidebar.success(f"Vítej, {name} ({role})!")
+    # Zabezpečení – role by měla být vždy nějaká platná hodnota
+    if role not in ['admin', 'normal', 'viewer']:
+        role = 'viewer'
+
+    st.sidebar.success(f"Vítej, **{name}** ({role})")
     authenticator.logout('Odhlásit se', location='sidebar')
 
-    init_db()
-    read_only = (role == 'viewer')
+    # Pokud init_db() opravdu něco dělá, zvaž cache nebo přesun do inicializace
+    #init_db()
 
+    read_only = (role == 'viewer')
     options = [
         "Přidat projekt / úkol",
         "Prohlížet / Upravovat úkoly",
@@ -1412,7 +1447,6 @@ elif st.session_state.authentication_status is False:
 
 elif st.session_state.authentication_status is None:
     st.warning("Přihlaste se prosím")
-
 # Footer
 if st.session_state.get('authentication_status'):
     st.sidebar.markdown("---")
