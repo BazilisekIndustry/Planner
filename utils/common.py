@@ -476,7 +476,7 @@ def change_password(username, new_password):
 # utils/common.py
 # ... ostatní importy a funkce ...
 
-def render_sidebar(authenticator, role, current_page):
+def render_sidebar(authenticator, current_page):
     # Zkus načíst roli z session_state
     role = st.session_state.get('role')
 
@@ -496,14 +496,13 @@ def render_sidebar(authenticator, role, current_page):
         except Exception as e:
             print(f"Chyba při načítání role z DB: {e}")
             role = 'viewer'
-    # Uvítání
+
+    # Teď už máme správnou roli
     user_name = st.session_state.get('name', 'Uživatel')
     st.sidebar.success(f"Vítej, **{user_name}** ({role})")
 
-    # Logout tlačítko
     authenticator.logout('Odhlásit se', location='sidebar')
 
-    # Seznam všech možností navigace
     options = [
         "Přidat projekt / úkol",
         "Prohlížet / Upravovat úkoly",
@@ -512,19 +511,14 @@ def render_sidebar(authenticator, role, current_page):
         "Správa pracovišť",
         "Změnit heslo"
     ]
-
-    # Pokud je uživatel admin, přidáme User Management
     if role == 'admin':
         options.append("User Management")
 
-    # Aktuální stránka – najdeme její index
     try:
         current_index = options.index(current_page)
     except ValueError:
-        current_index = 0  # fallback na první položku, kdyby se něco pokazilo
-        st.sidebar.warning(f"Stránka '{current_page}' nebyla nalezena v navigaci – vybrána první položka.")
+        current_index = 0
 
-    # Radio tlačítka – disabled=True aby se nedala změnit (jen pro vizuální označení)
     st.sidebar.radio(
         "Navigace",
         options,
@@ -533,7 +527,6 @@ def render_sidebar(authenticator, role, current_page):
         disabled=True
     )
 
-    # Footer v sidebaru
     st.sidebar.markdown("---")
     st.sidebar.markdown("Plánovač Horkých komor v1.1")
     st.sidebar.caption("petr.svrcula@cvrez.cz")
