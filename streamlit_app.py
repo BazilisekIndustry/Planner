@@ -16,6 +16,13 @@ from st_aggrid import AgGrid, GridUpdateMode, DataReturnMode
 import plotly.express as px
 from streamlit_authenticator.utilities.hasher import Hasher
 
+st.set_page_config(
+    page_title="Plánovač Horkých komor CVŘ",
+    page_icon=":radioactive:",
+    layout="wide"
+)
+
+st.title("Plánovač Horkých komor CVŘ")
 # ============================
 # KONFIGURACE
 # ============================
@@ -83,42 +90,22 @@ if not credentials.get("usernames", {}):
 # ──────────────────────────────────────────────────────────────
 
 def get_authenticator():
-    """Vrátí aktuální instanci Authenticate s nejčerstvějšími credentials"""
-    credentials = load_users_from_db()  # vždy čerstvé při volání funkce
-    
-    if 'authenticator' not in st.session_state:
-        st.session_state.authenticator = Authenticate(
-            credentials=credentials,
-            cookie_name=COOKIE_NAME,
-            key=COOKIE_KEY,
-            cookie_expiry_days=COOKIE_EXPIRY_DAYS,
-            auto_hash=True
-        )
-    
-    return st.session_state.authenticator
+    credentials = load_users_from_db()  # vždy aktuální uživatelé z DB
+    return Authenticate(
+        credentials=credentials,
+        cookie_name=COOKIE_NAME,
+        key=COOKIE_KEY,
+        cookie_expiry_days=COOKIE_EXPIRY_DAYS,
+        auto_hash=True
+    )
 
-
-# Inicializace základních hodnot v session state (pokud ještě neexistují)
-if 'authentication_status' not in st.session_state:
-    st.session_state.authentication_status = None
-if 'name' not in st.session_state:
-    st.session_state.name = None
-if 'username' not in st.session_state:
-    st.session_state.username = None
-
-
-# Získání autentizátoru (používá cache v session_state, ale credentials se aktualizují)
+# VŽDY vytvoř novou instanci při každém spuštění (NEcachuj ji!)
 authenticator = get_authenticator()
 
-
-# Nastavení stránky – mělo by být co nejdříve po importech
-st.set_page_config(
-    page_title="Plánovač Horkých komor CVŘ",
-    page_icon=":radioactive:",
-    layout="wide"
-)
-
-st.title("Plánovač Horkých komor CVŘ")
+# Inicializace session state klíčů (pro jistotu)
+for key in ['authentication_status', 'name', 'username', 'logout']:
+    if key not in st.session_state:
+        st.session_state[key] = None
 
 
 # ──────────────────────────────────────────────────────────────
@@ -132,7 +119,7 @@ if not st.session_state.authentication_status:
     )
     
     # Login formulář – zobrazí se při prvním načtení i po neúspěšném pokusu
-    authenticator.login(location='main', fields={'Form name': 'Přihlášení'})
+    authenticator.login(location='main') #, fields={'Form name': 'Přihlášení'})
 # ──────────────────────────────────────────────────────────────
 # REGISTRACE FONTU PRO PDF
 # ──────────────────────────────────────────────────────────────
@@ -559,8 +546,8 @@ def change_password(username, new_password):
 
 # ... (zbytek kódu zůstává beze změny - zpracování loginu, sidebar, jednotlivé sekce jako "Přidat projekt / úkol", "Prohlížet / Upravovat úkoly", atd. až po konec souboru)
 if st.session_state.get('authentication_status'):
-    username = st.session_state.get('username', 'neznámý')
-    name = st.session_state.get('name', 'Uživatel')
+    username = st.session_state.get('username')#, 'neznámý')
+    name = st.session_state.get('name') #, 'Uživatel')
 
     # Role – snažíme se použít hodnotu z authenticatoru (nejčastěji tam je)
     role = st.session_state.get('role', None)
