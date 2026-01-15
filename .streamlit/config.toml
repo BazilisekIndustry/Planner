@@ -1,0 +1,13 @@
+# .streamlit/config.toml
+[server]
+enableCORS = false
+enableXsrfProtection = false
+
+[browser]
+gatherUsageStats = false
+
+[client]
+toolbarMode = "minimal"  # Schová automatický sidebar s odkazy na pages
+
+[theme]
+primaryColor = "#FF6B6B"  # Volitelně: tvůj radioactive theme
