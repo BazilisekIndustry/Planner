@@ -477,13 +477,25 @@ def change_password(username, new_password):
 # ... ostatní importy a funkce ...
 
 def render_sidebar(authenticator, role, current_page):
-    """
-    Vykreslí společný sidebar s uvítáním, logoutem a navigací.
-    
-    :param authenticator: instance Authenticate
-    :param role: role uživatele ('admin', 'normal', 'viewer')
-    :param current_page: řetězec s názvem aktuální stránky (např. "Přidat projekt / úkol")
-    """
+    # Zkus načíst roli z session_state
+    role = st.session_state.get('role')
+
+    # Pokud role není, nebo je viewer, ale může být admin → načti z DB
+    username = st.session_state.get('username')
+    if username and (role is None or role == 'viewer'):
+        try:
+            response = supabase.table('app_users')\
+                       .select('role')\
+                       .eq('username', username)\
+                       .execute()
+            if response.data:
+                role = response.data[0]['role']
+                st.session_state['role'] = role  # ulož pro celou session
+            else:
+                role = 'viewer'  # fallback
+        except Exception as e:
+            print(f"Chyba při načítání role z DB: {e}")
+            role = 'viewer'
     # Uvítání
     user_name = st.session_state.get('name', 'Uživatel')
     st.sidebar.success(f"Vítej, **{user_name}** ({role})")
