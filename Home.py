@@ -25,7 +25,7 @@ authenticator.login(location='main')
 
 if st.session_state.get('authentication_status'):
     st.success("Přihlášeno! Přesměrovávám na hlavní stránku...")
-    st.switch_page("pages/2_Přidat_projekt_a_úkol.py")  # nebo na tvou první stránku
+    st.switch_page("pages/2_add_project.py")  # nebo na tvou první stránku
 
 elif st.session_state.authentication_status is False:
     st.error("**Nesprávné přihlašovací údaje.** Zkuste to prosím znovu. Pokud problém přetrvává, zkuste vymazat cookies v prohlížeči.")
