@@ -1,13 +1,6 @@
 # .streamlit/config.toml
-[server]
-enableCORS = false
-enableXsrfProtection = false
-
-[browser]
-gatherUsageStats = false
-
 [client]
-toolbarMode = "minimal"  # Schová automatický sidebar s odkazy na pages
+showSidebarNavigation = false      # ← TOTO vypne automatický sidebar s odkazy na pages (od verze 1.30+)
 
-[theme]
-primaryColor = "#FF6B6B"  # Volitelně: tvůj radioactive theme
+# Další užitečné nastavení (volitelné)
+toolbarMode = "minimal"
