@@ -12,7 +12,7 @@ name = st.session_state.get('name')
 role = st.session_state.get('role', 'viewer')
 
 # Render sidebaru – předej aktuální název stránky
-render_sidebar(authenticator, role, "Přidat projekt / úkol")
+render_sidebar(authenticator, "Přidat projekt / úkol")
 
 # Hlavní obsah stránky
 st.header("Přidat projekt a úkol")
