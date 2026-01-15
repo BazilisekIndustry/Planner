@@ -548,15 +548,14 @@ def render_sidebar(authenticator, current_page):
     st.sidebar.caption("petr.svrcula@cvrez.cz")
 
 def get_authenticator():
-    """
-    Vytvoří čerstvou instanci Authenticate s aktuálními credentials z DB.
-    Volá se v každé stránce pro správné čtení cookies po refreshi.
-    """
     credentials = load_users_from_db()
     return Authenticate(
         credentials=credentials,
         cookie_name=COOKIE_NAME,
         key=COOKIE_KEY,
         cookie_expiry_days=COOKIE_EXPIRY_DAYS,
-        auto_hash=True
+        auto_hash=True,
+        # Nové: explicitní cookie nastavení pro lepší chování při refreshi
+        cookie_secure=True,           # false na local/http, true na https/cloudu
+        cookie_samesite="Lax"          # ← KLÍČOVÉ – Lax umožní cookie při refreshi (Strict to blokuje)
     )

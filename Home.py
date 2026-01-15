@@ -20,12 +20,20 @@ st.markdown(
     "Pro založení nového uživatele kontaktujte petr.svrcula@cvrez.cz."
 )
 
-# Login – volá se vždy pro čtení cookies
-authenticator.login(location='main')
-
 if st.session_state.get('authentication_status'):
-    st.success("Přihlášeno! Přesměrovávám na hlavní stránku...")
-    st.switch_page("pages/2_add_project.py")  # nebo na tvou první stránku
+    # Force uložení cookie a role
+    st.session_state['authentication_status'] = True
+    if 'role' not in st.session_state:
+        # Načti roli hned
+        try:
+            response = supabase.table('app_users').select('role').eq('username', st.session_state.get('username')).execute()
+            if response.data:
+                st.session_state['role'] = response.data[0]['role']
+        except:
+            st.session_state['role'] = 'viewer'
+    
+    st.success("Přihlášeno! Přesměrovávám...")
+    st.switch_page("pages/2_add_project.py")
 
 elif st.session_state.authentication_status is False:
     st.error("**Nesprávné přihlašovací údaje.** Zkuste to prosím znovu. Pokud problém přetrvává, zkuste vymazat cookies v prohlížeči.")
