@@ -20,7 +20,7 @@ name = st.session_state.get('name')
 role = st.session_state.get('role', 'viewer')
 read_only = (role == 'viewer')
 # Render sidebaru – předej aktuální název stránky
-render_sidebar(authenticator, role, "HMG měsíční")
+render_sidebar(authenticator, "HMG měsíční")
 st.header("HMG měsíční – Přehled úkolů po dnech")
 selected_year = st.number_input("Rok", min_value=2020, max_value=2030, value=datetime.now().year, key="hmg_year")
 selected_month = st.number_input("Měsíc", min_value=1, max_value=12, value=datetime.now().month, key="hmg_month")

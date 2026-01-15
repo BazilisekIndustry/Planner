@@ -12,7 +12,7 @@ name = st.session_state.get('name')
 role = st.session_state.get('role', 'viewer')
 read_only = (role == 'viewer')
 # Render sidebaru – předej aktuální název stránky
-render_sidebar(authenticator, role, "Prohlížet / Upravovat úkoly")
+render_sidebar(authenticator, "Prohlížet / Upravovat úkoly")
 
 st.header("Prohlížet / Upravovat úkoly")
 if read_only:

@@ -15,7 +15,7 @@ name = st.session_state.get('name')
 role = st.session_state.get('role', 'viewer')
 
 # Sidebar
-render_sidebar(authenticator, role, "User Management")
+render_sidebar(authenticator, "User Management")
 
 # Celý obsah jen pro adminy
 if role != 'admin':

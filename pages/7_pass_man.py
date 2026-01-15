@@ -15,7 +15,7 @@ name = st.session_state.get('name')
 role = st.session_state.get('role', 'viewer')
 
 # Sidebar (read_only zde není potřeba)
-render_sidebar(authenticator, role, "Změnit heslo")
+render_sidebar(authenticator, "Změnit heslo")
 
 st.header("Změnit heslo")
 

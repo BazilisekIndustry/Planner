@@ -477,10 +477,8 @@ def change_password(username, new_password):
 # ... ostatní importy a funkce ...
 
 def render_sidebar(authenticator, current_page):
-    # Zkus načíst roli z session_state
+    # Načtení role z DB (pokud chybí) – už máš
     role = st.session_state.get('role')
-
-    # Pokud role není, nebo je viewer, ale může být admin → načti z DB
     username = st.session_state.get('username')
     if username and (role is None or role == 'viewer'):
         try:
@@ -490,14 +488,11 @@ def render_sidebar(authenticator, current_page):
                        .execute()
             if response.data:
                 role = response.data[0]['role']
-                st.session_state['role'] = role  # ulož pro celou session
-            else:
-                role = 'viewer'  # fallback
+                st.session_state['role'] = role
         except Exception as e:
-            print(f"Chyba při načítání role z DB: {e}")
+            print(f"Chyba při načítání role: {e}")
             role = 'viewer'
 
-    # Teď už máme správnou roli
     user_name = st.session_state.get('name', 'Uživatel')
     st.sidebar.success(f"Vítej, **{user_name}** ({role})")
 
@@ -514,18 +509,39 @@ def render_sidebar(authenticator, current_page):
     if role == 'admin':
         options.append("User Management")
 
+    # Mapování textu na název souboru (přizpůsob si podle tvých souborů)
+    page_map = {
+        "Přidat projekt / úkol": "pages/2_add_project.py",
+        "Prohlížet / Upravovat úkoly": "pages/3_prohlizet_upravovat.py",
+        "HMG měsíční": "pages/4_hmg_mesicni.py",
+        "HMG roční": "pages/5_hmg_rocni.py",
+        "Správa pracovišť": "pages/6_sprava_pracovist.py",
+        "Změnit heslo": "pages/7_zmenit_heslo.py",
+        "User Management": "pages/8_user_management.py"
+    }
+
+    # Najdi aktuální index
     try:
         current_index = options.index(current_page)
     except ValueError:
         current_index = 0
 
-    st.sidebar.radio(
+    # Klikatelné radio menu
+    selected = st.sidebar.radio(
         "Navigace",
         options,
         index=current_index,
-        key="nav_radio",
-        disabled=True
+        key="nav_radio"
+        # disabled=False – defaultně je to True jen když ho explicitně nastavíš
     )
+
+    # Přesměrování na vybranou stránku
+    if selected != current_page:
+        target_page = page_map.get(selected)
+        if target_page:
+            st.switch_page(target_page)
+        else:
+            st.warning(f"Stránka '{selected}' není namapovaná – kontaktujte admina.")
 
     st.sidebar.markdown("---")
     st.sidebar.markdown("Plánovač Horkých komor v1.1")

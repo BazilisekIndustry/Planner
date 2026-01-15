@@ -19,7 +19,7 @@ role = st.session_state.get('role', 'viewer')
 read_only = (role == 'viewer')  # zde není potřeba, ale pro konzistenci OK
 
 # Sidebar
-render_sidebar(authenticator, role, "HMG roční")
+render_sidebar(authenticator, "HMG roční")
 
 st.header("HMG roční – Heatmap obsazenosti pracovišť")
 
