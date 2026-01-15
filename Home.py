@@ -15,7 +15,7 @@ st.title("Plánovač Horkých komor CVŘ")
 authenticator = get_authenticator()
 
 st.markdown(
-    "Vítejte v Plánovači Horkých komor CVŘ.\n\n"
+    "Vítejte v Plánovači Horkých komor CVŘ v2.\n\n"
     "Přihlaste se prosím.\n\n"
     "Pro založení nového uživatele kontaktujte petr.svrcula@cvrez.cz."
 )
