@@ -1,7 +1,6 @@
 # Home.py
 import streamlit as st
-from utils.common import get_authenticator  # ← NOVÝ IMPORT: funkce z common.py
-# from utils.common import load_users_from_db  # pokud potřebuješ, ale není nutné
+from utils.common import get_authenticator
 
 st.set_page_config(
     page_title="Plánovač Horkých komor CVŘ – Přihlášení",
@@ -11,32 +10,36 @@ st.set_page_config(
 
 st.title("Plánovač Horkých komor CVŘ")
 
-# Vytvoř autentizátor z nové funkce (čerstvé credentials)
+# Vytvoř autentizátor
 authenticator = get_authenticator()
 
+# Force zobrazení loginu (pokud zmizí)
 st.markdown(
-    "Vítejte v Plánovači Horkých komor CVŘ v2.\n\n"
-    "Přihlaste se prosím.\n\n"
-    "Pro založení nového uživatele kontaktujte petr.svrcula@cvrez.cz."
+    """
+    Vítejte v Plánovači Horkých komor CVŘ v2.\n\n
+    Přihlaste se prosím.\n\n
+    Pro založení nového uživatele kontaktujte petr.svrcula@cvrez.cz.
+    """
 )
 
+# Login – volá se vždy
+authenticator.login(location='main', fields={
+    'Form name': 'Přihlášení',
+    'Username': 'Uživatelské jméno',
+    'Password': 'Heslo',
+    'Login': 'Přihlásit se'
+})
+
+# Explicitní kontrola stavu (pokud formulář zmizí)
+if 'authentication_status' not in st.session_state:
+    st.session_state.authentication_status = None
+
+if st.session_state.authentication_status is None:
+    st.info("Přihlašovací formulář by se měl zobrazit výše. Pokud ne, zkuste refresh (F5) nebo otevřít v anonymním okně.")
+
 if st.session_state.get('authentication_status'):
-    # Force uložení cookie a role
-    st.session_state['authentication_status'] = True
-    if 'role' not in st.session_state:
-        # Načti roli hned
-        try:
-            response = supabase.table('app_users').select('role').eq('username', st.session_state.get('username')).execute()
-            if response.data:
-                st.session_state['role'] = response.data[0]['role']
-        except:
-            st.session_state['role'] = 'viewer'
-    
     st.success("Přihlášeno! Přesměrovávám...")
     st.switch_page("pages/2_add_project.py")
 
 elif st.session_state.authentication_status is False:
-    st.error("**Nesprávné přihlašovací údaje.** Zkuste to prosím znovu. Pokud problém přetrvává, zkuste vymazat cookies v prohlížeči.")
-
-elif st.session_state.authentication_status is None:
-    st.warning("Přihlaste se prosím. Pokud jste již přihlášeni, zkuste refresh stránky (F5) nebo vymazat cookies.")
+    st.error("Nesprávné přihlašovací údaje. Zkuste znovu.")
