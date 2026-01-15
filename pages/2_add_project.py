@@ -1,18 +1,17 @@
+# pages/2_add_project.py
 import streamlit as st
-from utils.common import *  # ← importuje VŠECHNO z common.py (nejjednodušší)
-authenticator = get_authenticator()  # ← vytvoř čerstvě
-# Kontrola přihlášení
-if not st.session_state.get('authentication_status'):
+from utils.auth_simple import check_login, logout
+from utils.common import *  # tvůj sidebar, pokud ho chceš zachovat
+if not check_login():
     st.switch_page("Home.py")
     st.stop()
 
-# Uživatelská data
-username = st.session_state.get('username')
-name = st.session_state.get('name')
-role = st.session_state.get('role', 'viewer')
-
+# Teď máš v session_state vše potřebné
+role = st.session_state.get("role", "viewer")
+username = st.session_state.get("username")
+name = st.session_state.get("name")
 # Render sidebaru – předej aktuální název stránky
-render_sidebar(authenticator, "Přidat projekt / úkol")
+render_sidebar("Přidat projekt / úkol")
 
 # Hlavní obsah stránky
 st.header("Přidat projekt a úkol")

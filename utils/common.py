@@ -476,10 +476,16 @@ def change_password(username, new_password):
 # utils/common.py
 # ... ostatní importy a funkce ...
 
-def render_sidebar(authenticator, current_page):
-    # Načtení role z DB (pokud chybí) – už máš
+# utils/common.py (jen tato funkce – zbytek souboru nech tak, jak je)
+def render_sidebar(current_page):
+    """
+    Vykreslí sidebar s uvítáním, logoutem a klikatelnou navigací.
+    Funguje s auth_simple.py (cookies + Supabase).
+    """
+    # Načtení role z DB, pokud chybí nebo je viewer
     role = st.session_state.get('role')
     username = st.session_state.get('username')
+    
     if username and (role is None or role == 'viewer'):
         try:
             response = supabase.table('app_users')\
@@ -489,15 +495,22 @@ def render_sidebar(authenticator, current_page):
             if response.data:
                 role = response.data[0]['role']
                 st.session_state['role'] = role
+            else:
+                role = 'viewer'
         except Exception as e:
             print(f"Chyba při načítání role: {e}")
             role = 'viewer'
 
+    # Uvítání
     user_name = st.session_state.get('name', 'Uživatel')
     st.sidebar.success(f"Vítej, **{user_name}** ({role})")
 
-    authenticator.logout('Odhlásit se', location='sidebar')
+    # Logout tlačítko (použijeme funkci z auth_simple.py)
+    from utils.auth_simple import logout  # ← import zde (nebo nahoře v souboru)
+    if st.sidebar.button("Odhlásit se"):
+        logout()
 
+    # Seznam položek navigace
     options = [
         "Přidat projekt / úkol",
         "Prohlížet / Upravovat úkoly",
@@ -509,7 +522,7 @@ def render_sidebar(authenticator, current_page):
     if role == 'admin':
         options.append("User Management")
 
-    # Mapování textu na název souboru (přizpůsob si podle tvých souborů)
+    # Mapování textu → název souboru (uprav si podle skutečných názvů tvých .py souborů!)
     page_map = {
         "Přidat projekt / úkol": "pages/2_add_project.py",
         "Prohlížet / Upravovat úkoly": "pages/3_task_man.py",
@@ -520,11 +533,12 @@ def render_sidebar(authenticator, current_page):
         "User Management": "pages/8_user_man.py"
     }
 
-    # Najdi aktuální index
+    # Najdi index aktuální stránky
     try:
         current_index = options.index(current_page)
     except ValueError:
         current_index = 0
+        st.sidebar.warning(f"Stránka '{current_page}' není v navigaci.")
 
     # Klikatelné radio menu
     selected = st.sidebar.radio(
@@ -532,30 +546,19 @@ def render_sidebar(authenticator, current_page):
         options,
         index=current_index,
         key="nav_radio"
-        # disabled=False – defaultně je to True jen když ho explicitně nastavíš
+        # Žádný disabled – uživatel může kliknout a přepnout
     )
 
-    # Přesměrování na vybranou stránku
+    # Přesměrování při změně
     if selected != current_page:
         target_page = page_map.get(selected)
         if target_page:
             st.switch_page(target_page)
         else:
-            st.warning(f"Stránka '{selected}' není namapovaná – kontaktujte admina.")
+            st.sidebar.warning(f"Stránka '{selected}' není namapovaná.")
 
+    # Footer
     st.sidebar.markdown("---")
     st.sidebar.markdown("Plánovač Horkých komor v1.1")
     st.sidebar.caption("petr.svrcula@cvrez.cz")
 
-def get_authenticator():
-    credentials = load_users_from_db()
-    return Authenticate(
-        credentials=credentials,
-        cookie_name=COOKIE_NAME,
-        key=COOKIE_KEY,
-        cookie_expiry_days=COOKIE_EXPIRY_DAYS,
-        auto_hash=True,
-        # Nové: explicitní cookie nastavení pro lepší chování při refreshi
-        cookie_secure=True,           # false na local/http, true na https/cloudu
-        cookie_samesite="Lax"          # ← KLÍČOVÉ – Lax umožní cookie při refreshi (Strict to blokuje)
-    )
