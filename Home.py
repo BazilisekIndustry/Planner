@@ -31,13 +31,20 @@ authenticator.login(location='main', fields={
 })
 
 # Explicitní kontrola stavu (pokud formulář zmizí)
-if 'authentication_status' not in st.session_state:
-    st.session_state.authentication_status = None
-
-if st.session_state.authentication_status is None:
-    st.info("Přihlašovací formulář by se měl zobrazit výše. Pokud ne, zkuste refresh (F5) nebo otevřít v anonymním okně.")
-
 if st.session_state.get('authentication_status'):
+    # Force uložení stavu + role (proti ztrátě při switch_page)
+    st.session_state.authentication_status = True
+    
+    # Načti roli hned (pro jistotu)
+    username = st.session_state.get('username')
+    if username and 'role' not in st.session_state:
+        try:
+            response = supabase.table('app_users').select('role').eq('username', username).execute()
+            if response.data:
+                st.session_state['role'] = response.data[0]['role']
+        except:
+            st.session_state['role'] = 'viewer'
+    
     st.success("Přihlášeno! Přesměrovávám...")
     st.switch_page("pages/2_add_project.py")
 
