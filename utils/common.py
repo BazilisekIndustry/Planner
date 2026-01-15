@@ -512,12 +512,12 @@ def render_sidebar(authenticator, current_page):
     # Mapování textu na název souboru (přizpůsob si podle tvých souborů)
     page_map = {
         "Přidat projekt / úkol": "pages/2_add_project.py",
-        "Prohlížet / Upravovat úkoly": "pages/3_prohlizet_upravovat.py",
-        "HMG měsíční": "pages/4_hmg_mesicni.py",
-        "HMG roční": "pages/5_hmg_rocni.py",
-        "Správa pracovišť": "pages/6_sprava_pracovist.py",
-        "Změnit heslo": "pages/7_zmenit_heslo.py",
-        "User Management": "pages/8_user_management.py"
+        "Prohlížet / Upravovat úkoly": "pages/3_task_man.py",
+        "HMG měsíční": "pages/4_HMG_month.py",
+        "HMG roční": "pages/5_HMG_year.py",
+        "Správa pracovišť": "pages/6_WP_man.py",
+        "Změnit heslo": "pages/7_pass_man.py",
+        "User Management": "pages/8_user_man.py"
     }
 
     # Najdi aktuální index
