@@ -48,7 +48,7 @@ def hash_single_password(plain_password: str) -> str:
     return temp_credentials["usernames"]["temp_user"]["password"]
 
 # Načítání uživatelů z databáze (cachované, bez widgetů uvnitř)
-@st.cache_data(ttl=600)  # 10 minut – dostatečně dlouho
+#@st.cache_data(ttl=600)  # 10 minut – dostatečně dlouho
 def load_users_from_db():
     try:
         response = supabase.table('app_users')\
@@ -78,41 +78,61 @@ if not credentials.get("usernames", {}):
     st.warning("V databázi nejsou žádní uživatelé nebo došlo k chybě při načítání.")
 
 # Authenticator – jediná inicializace přes cache + session_state
-@st.cache_resource
-def create_authenticator():
-    creds = load_users_from_db()  # cache zaručí rychlost
-    return Authenticate(
-        credentials=creds,
-        cookie_name=COOKIE_NAME,
-        key=COOKIE_KEY,
-        cookie_expiry_days=COOKIE_EXPIRY_DAYS,
-        location='main',
-        auto_hash=True                  # ← explicitně – default, ale pro jistotu
-    )
+# ──────────────────────────────────────────────────────────────
+# Inicializace autentizátoru a přihlášení
+# ──────────────────────────────────────────────────────────────
 
-if 'authenticator' not in st.session_state:
-    st.session_state.authenticator = create_authenticator()
+def get_authenticator():
+    """Vrátí aktuální instanci Authenticate s nejčerstvějšími credentials"""
+    credentials = load_users_from_db()  # vždy čerstvé při volání funkce
+    
+    if 'authenticator' not in st.session_state:
+        st.session_state.authenticator = Authenticate(
+            credentials=credentials,
+            cookie_name=COOKIE_NAME,
+            key=COOKIE_KEY,
+            cookie_expiry_days=COOKIE_EXPIRY_DAYS,
+            auto_hash=True
+        )
+    
+    return st.session_state.authenticator
 
-authenticator = st.session_state.authenticator
 
-# Inicializace stavu přihlášení
+# Inicializace základních hodnot v session state (pokud ještě neexistují)
 if 'authentication_status' not in st.session_state:
     st.session_state.authentication_status = None
+if 'name' not in st.session_state:
+    st.session_state.name = None
+if 'username' not in st.session_state:
+    st.session_state.username = None
 
+
+# Získání autentizátoru (používá cache v session_state, ale credentials se aktualizují)
+authenticator = get_authenticator()
+
+
+# Nastavení stránky – mělo by být co nejdříve po importech
 st.set_page_config(
     page_title="Plánovač Horkých komor CVŘ",
     page_icon=":radioactive:",
     layout="wide"
 )
+
 st.title("Plánovač Horkých komor CVŘ")
 
-# ──────────────────────────────────────────────────────────────
-# LOGIN – jen jednou, pokud není stav rozhodnut
-# ──────────────────────────────────────────────────────────────
-if st.session_state.authentication_status is None:
-    st.markdown("Vítejte v Plánovači Horkých komor CVŘ. Přihlaste se prosím. \n\n Pro založení nového uživatele kontaktujte petr.svrcula@cvrez.cz.")
-    authenticator.login(location='main')
 
+# ──────────────────────────────────────────────────────────────
+# Přihlašovací obrazovka – zobrazuje se pokud uživatel není přihlášen
+# ──────────────────────────────────────────────────────────────
+if not st.session_state.authentication_status:
+    st.markdown(
+        "Vítejte v Plánovači Horkých komor CVŘ.\n\n"
+        "Přihlaste se prosím.\n\n"
+        "Pro založení nového uživatele kontaktujte petr.svrcula@cvrez.cz."
+    )
+    
+    # Login formulář – zobrazí se při prvním načtení i po neúspěšném pokusu
+    authenticator.login(location='main', fields={'Form name': 'Přihlášení'})
 # ──────────────────────────────────────────────────────────────
 # REGISTRACE FONTU PRO PDF
 # ──────────────────────────────────────────────────────────────
