@@ -126,13 +126,27 @@ else:
     fig.update_layout(bargap=0.2, bargroupgap=0.1, showlegend=False)
 
     # Víkendy a svátky – červené čáry
+   
+    # Vertikální čáry pro víkendy a svátky
     holidays = get_holidays(selected_year)
+
     current = first_day
     while current <= last_day:
         if current.weekday() >= 5 or current in holidays:
             label = "S" if current in holidays else "V"
-            fig.add_vline(x=current, line_dash="dash", line_color="red", opacity=0.5,
-                            annotation_text=label, annotation_position="top")
+            
+            # Převod na číselný timestamp (Plotly to potřebuje pro správný výpočet)
+            x_num = current.toordinal()  # nebo můžete použít current.timestamp() * 1000 pro milisekundy
+            
+            fig.add_vline(
+                x=x_num,                     # ← klíčová změna: číslo místo date objektu
+                line_dash="dash",
+                line_color="red",
+                opacity=0.5,
+                annotation_text=label,
+                annotation_position="top"
+            )
+        
         current += timedelta(days=1)
 
     st.plotly_chart(fig, use_container_width=True)

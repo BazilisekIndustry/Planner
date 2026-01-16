@@ -24,7 +24,10 @@ projects = get_projects()
 if not projects:
     st.info("Nejprve přidejte alespoň jeden projekt.")
 else:
-    display_options = [(f"{pid} – {name or 'bez názvu'}", pid) for pid, name in projects]
+    display_options = [
+        (f"{pid} – {name or 'bez názvu'}", pid)
+        for pid, name, color in projects   # ← přidáme color (i když ho nepoužijeme)
+    ]
     selected_display, selected_project = st.selectbox(
         "Vyberte projekt",
         options=display_options,
