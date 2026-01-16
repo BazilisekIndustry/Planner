@@ -430,7 +430,6 @@ def add_user(username, name, password, role, email=""):
     try:
         response = supabase.table('app_users').insert(data).execute()
         if response.data:
-            load_users_from_db.clear()  # Vyčistíme cache
             return True, "Uživatel úspěšně přidán do databáze."
         else:
             return False, "Nepodařilo se vložit uživatele."
@@ -448,7 +447,6 @@ def reset_password(username, new_password='1234'):
                    .eq("username", username)\
                    .execute()
         if response.data:
-            load_users_from_db.clear()
             return True, f"Heslo resetováno na '{new_password}' (doporučte změnu po přihlášení)."
         else:
             return False, "Uživatel nenalezen."
@@ -466,7 +464,6 @@ def change_password(username, new_password):
                    .eq("username", username)\
                    .execute()
         if response.data:
-            load_users_from_db.clear()
             return True, "Heslo úspěšně změněno."
         else:
             return False, "Uživatel nenalezen."
