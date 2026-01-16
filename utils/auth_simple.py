@@ -4,20 +4,15 @@ from streamlit_cookies_controller import CookieController
 from streamlit_authenticator.utilities.hasher import Hasher
 import time
 from utils.common import supabase
+import bcrypt  # ← PŘIDEJ tento import nahoře v souboru!
 
 cookie_controller = CookieController()
 COOKIE_NAME = "planner_user_session_v3"
 
-def hash_password(plain_password: str) -> str:
-    """Aktuální správné bcrypt hashování pro verzi 0.4.2+"""
-    temp_creds = {"usernames": {"temp": {"password": plain_password}}}
-    Hasher.hash_passwords(temp_creds)
-    return temp_creds["usernames"]["temp"]["password"]
 
 def authenticate_user(username: str, password: str):
-    """Ověří uživatele proti Supabase"""
     username = username.strip()
-    st.write(f"DEBUG: Přihlašuji '{username}'")  # ← pro ladění
+    st.write(f"DEBUG: Přihlašuji '{username}'")
 
     try:
         response = supabase.table('app_users')\
@@ -25,20 +20,18 @@ def authenticate_user(username: str, password: str):
                    .eq("username", username)\
                    .execute()
 
-        st.write(f"DEBUG: Supabase odpověď: {response.data}")  # ← klíčový výpis
+        st.write(f"DEBUG: Supabase odpověď: {response.data}")
 
         if not response.data:
             st.error("Uživatel nenalezen.")
             return None
 
         user = response.data[0]
-        stored_hash = user['password_hash']
-        input_hash = hash_password(password)
+        stored_hash = user['password_hash'].encode('utf-8')  # bcrypt chce bytes
+        input_password = password.encode('utf-8')
 
-        st.write(f"DEBUG: Uložený hash: {stored_hash[:30]}...")  # začátek pro kontrolu
-        st.write(f"DEBUG: Vypočítaný hash: {input_hash[:30]}...")
-
-        if input_hash == stored_hash:
+        if bcrypt.checkpw(input_password, stored_hash):
+            st.write("DEBUG: Heslo sedí!")
             return {
                 "username": user['username'],
                 "name": user['name'],
