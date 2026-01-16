@@ -1,4 +1,5 @@
 # pages/8_User_Management.py
+from time import time
 import streamlit as st
 from utils.common import *  # ← všechno (add_user, reset_password, delete_project atd.)
 
@@ -49,6 +50,7 @@ else:
                 email=new_email.strip()
                 )
                 st.toast("Uživatel přidán.")
+                time.sleep(0.5)
                 if success:
                     st.toast("Uživatel přidán.")
                     st.success(message)
@@ -76,7 +78,7 @@ else:
                     try:
                         success, message = reset_password(selected_username)
                         st.toast("Heslo uživatele **{selected_username}** bylo resetovánona '1234'")
-
+                        time.sleep(0.5)
                         if success:
                             st.success(message)
                             st.rerun()
