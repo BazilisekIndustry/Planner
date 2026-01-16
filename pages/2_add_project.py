@@ -56,6 +56,7 @@ else:
         st.subheader("Přidat úkol")
         with st.form(key="add_task_form"):
             colA, colB = st.columns(2)
+            
             with colA:
                 project_choices = get_project_choices()
                 if not project_choices:
@@ -63,7 +64,10 @@ else:
                     project_id = None
                 else:
                     projects = get_projects()
-                    display_options = [(f"{pid} – {name or 'bez názvu'}", pid) for pid, name in projects]
+                    display_options = [
+                        (f"{pid} – {name or 'bez názvu'}", pid) 
+                        for pid, name, *_ in projects
+                    ]
                     selected_display, project_id = st.selectbox(
                         "Projekt",
                         options=display_options,
@@ -109,8 +113,9 @@ else:
                 start_date_obj = st.date_input("Začátek (volitelné)", value=None, format="DD.MM.YYYY")
                 start_ddmmyyyy = start_date_obj.strftime('%d.%m.%Y') if start_date_obj else None
                 notes = st.text_area("Poznámka")
-
-            submitted = st.form_submit_button("Přidat úkol")
+    
+    # Submit button JEŠTĚ UVNITŘ form, ale MIMO sloupce → nejstabilnější
+            submitted = st.form_submit_button("Přidat úkol", use_container_width=True)
 
             if submitted:
                 if not project_id:
