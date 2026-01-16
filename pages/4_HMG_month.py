@@ -1,6 +1,6 @@
 import streamlit as st
 from utils.common import *  # ← importuje VŠECHNO z common.py (nejjednodušší)
-
+from utils.auth_simple import check_login, logout
 try:
     pdfmetrics.registerFont(TTFont('DejaVu', 'DejaVuSans.ttf'))
     pdf_font = 'DejaVu'
@@ -8,19 +8,20 @@ except Exception:
     print("Varování: Font DejaVuSans.ttf nebyl nalezen – diakritika v PDF nemusí fungovat správně.")
     pdf_font = 'Helvetica'
 
-authenticator = get_authenticator()  # ← vytvoř čerstvě
-# Kontrola přihlášení
-if not st.session_state.get('authentication_status'):
+
+
+# Kontrola přihlášení (nový způsob)
+if not check_login():
     st.switch_page("Home.py")
     st.stop()
 
-# Uživatelská data
-username = st.session_state.get('username')
-name = st.session_state.get('name')
-role = st.session_state.get('role', 'viewer')
-read_only = (role == 'viewer')
-# Render sidebaru – předej aktuální název stránky
-render_sidebar(authenticator, "HMG měsíční")
+# Uživatelská data – teď už máš vše v session_state
+username = st.session_state.get("username", "neznámý")
+name = st.session_state.get("name", "Uživatel")
+role = st.session_state.get("role", "viewer")
+read_only = (role == "viewer")
+
+render_sidebar("HMG měsíční")
 st.header("HMG měsíční – Přehled úkolů po dnech")
 selected_year = st.number_input("Rok", min_value=2020, max_value=2030, value=datetime.now().year, key="hmg_year")
 selected_month = st.number_input("Měsíc", min_value=1, max_value=12, value=datetime.now().month, key="hmg_month")

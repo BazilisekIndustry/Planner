@@ -2,20 +2,20 @@
 import streamlit as st
 from utils.common import *  # ← všechno (add_workplace, delete_workplace, get_workplaces atd.)
 
-authenticator = get_authenticator()  # ← čerstvý autentizátor
+from utils.auth_simple import check_login, logout
 
-# Kontrola přihlášení
-if not st.session_state.get('authentication_status'):
+# Kontrola přihlášení (nový způsob)
+if not check_login():
     st.switch_page("Home.py")
     st.stop()
 
-# Uživatelská data
-username = st.session_state.get('username')
-name = st.session_state.get('name')
-role = st.session_state.get('role', 'viewer')
+# Uživatelská data – teď už máš vše v session_state
+username = st.session_state.get("username", "neznámý")
+name = st.session_state.get("name", "Uživatel")
+role = st.session_state.get("role", "viewer")
+read_only = (role == "viewer")
 
-# Sidebar (read_only zde není potřeba, takže ho můžeme vynechat)
-render_sidebar(authenticator, "Správa pracovišť")
+render_sidebar("Správa pracovišť")
 
 # Hlavní obsah – jen pro adminy
 if role != 'admin':

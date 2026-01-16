@@ -1,18 +1,20 @@
 import streamlit as st
 from utils.common import *  # ← importuje VŠECHNO z common.py (nejjednodušší)
-authenticator = get_authenticator()  # ← vytvoř čerstvě
-# Kontrola přihlášení
-if not st.session_state.get('authentication_status'):
+from utils.auth_simple import check_login, logout
+
+# Kontrola přihlášení (nový způsob)
+if not check_login():
     st.switch_page("Home.py")
     st.stop()
 
-# Uživatelská data
-username = st.session_state.get('username')
-name = st.session_state.get('name')
-role = st.session_state.get('role', 'viewer')
-read_only = (role == 'viewer')
-# Render sidebaru – předej aktuální název stránky
-render_sidebar(authenticator, "Prohlížet / Upravovat úkoly")
+# Uživatelská data – teď už máš vše v session_state
+username = st.session_state.get("username", "neznámý")
+name = st.session_state.get("name", "Uživatel")
+role = st.session_state.get("role", "viewer")
+read_only = (role == "viewer")
+
+# Render sidebaru – už bez authenticatoru!
+render_sidebar("Prohlížet / Upravovat úkoly")
 
 st.header("Prohlížet / Upravovat úkoly")
 if read_only:

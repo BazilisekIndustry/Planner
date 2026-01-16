@@ -4,22 +4,20 @@ from datetime import datetime, timedelta, date
 import pandas as pd
 import plotly.express as px
 from utils.common import *  # ← všechno ostatní (get_workplaces, is_working_day atd.)
+from utils.auth_simple import check_login, logout
 
-authenticator = get_authenticator()  # ← čerstvý autentizátor
-
-# Kontrola přihlášení
-if not st.session_state.get('authentication_status'):
+# Kontrola přihlášení (nový způsob)
+if not check_login():
     st.switch_page("Home.py")
     st.stop()
 
-# Uživatelská data
-username = st.session_state.get('username')
-name = st.session_state.get('name')
-role = st.session_state.get('role', 'viewer')
-read_only = (role == 'viewer')  # zde není potřeba, ale pro konzistenci OK
+# Uživatelská data – teď už máš vše v session_state
+username = st.session_state.get("username", "neznámý")
+name = st.session_state.get("name", "Uživatel")
+role = st.session_state.get("role", "viewer")
+read_only = (role == "viewer")
 
-# Sidebar
-render_sidebar(authenticator, "HMG roční")
+render_sidebar("HMG roční")
 
 st.header("HMG roční – Heatmap obsazenosti pracovišť")
 

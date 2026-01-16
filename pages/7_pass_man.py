@@ -1,21 +1,20 @@
 # pages/7_Změnit_heslo.py
 import streamlit as st
 from utils.common import *  # ← všechno (change_password atd.)
+from utils.auth_simple import check_login, logout
 
-authenticator = get_authenticator()  # ← čerstvý autentizátor
-
-# Kontrola přihlášení
-if not st.session_state.get('authentication_status'):
+# Kontrola přihlášení (nový způsob)
+if not check_login():
     st.switch_page("Home.py")
     st.stop()
 
-# Uživatelská data
-username = st.session_state.get('username')
-name = st.session_state.get('name')
-role = st.session_state.get('role', 'viewer')
+# Uživatelská data – teď už máš vše v session_state
+username = st.session_state.get("username", "neznámý")
+name = st.session_state.get("name", "Uživatel")
+role = st.session_state.get("role", "viewer")
+read_only = (role == "viewer")
 
-# Sidebar (read_only zde není potřeba)
-render_sidebar(authenticator, "Změnit heslo")
+render_sidebar("Změnit heslo")
 
 st.header("Změnit heslo")
 

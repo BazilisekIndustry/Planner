@@ -2,15 +2,17 @@
 import streamlit as st
 from utils.auth_simple import check_login, logout
 from utils.common import *  # tvůj sidebar, pokud ho chceš zachovat
+
+# Kontrola přihlášení (nový způsob)
 if not check_login():
     st.switch_page("Home.py")
     st.stop()
 
-# Teď máš v session_state vše potřebné
+# Uživatelská data – teď už máš vše v session_state
+username = st.session_state.get("username", "neznámý")
+name = st.session_state.get("name", "Uživatel")
 role = st.session_state.get("role", "viewer")
-username = st.session_state.get("username")
-name = st.session_state.get("name")
-# Render sidebaru – předej aktuální název stránky
+read_only = (role == "viewer")
 render_sidebar("Přidat projekt / úkol")
 
 # Hlavní obsah stránky
