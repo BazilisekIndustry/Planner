@@ -2,7 +2,7 @@
 import streamlit as st
 from utils.auth_simple import login, check_login
 from streamlit_authenticator.utilities.hasher import Hasher
-from supabase import create_client
+from utils.common import supabase
 
 st.set_page_config(page_title="Plánovač – Přihlášení", layout="wide")
 # Na konec Home.py (před login formulářem)
