@@ -1,16 +1,15 @@
 # pages/8_User_Management.py
 import time
 import streamlit as st
-from utils.common import *  # ← všechno (add_user, reset_password, delete_project atd.)
-
+from utils.common import *  # ← add_user, reset_password, delete_project, get_project_choices, get_projects atd.
 from utils.auth_simple import check_login, logout
 
-# Kontrola přihlášení (nový způsob)
+# Kontrola přihlášení
 if not check_login():
     st.switch_page("Home.py")
     st.stop()
 
-# Uživatelská data – teď už máš vše v session_state
+# Uživatelská data
 username = st.session_state.get("username", "neznámý")
 name = st.session_state.get("name", "Uživatel")
 role = st.session_state.get("role", "viewer")
@@ -25,6 +24,17 @@ if role != 'admin':
 else:
     st.header("User Management – Pouze pro admin")
 
+    # Načteme uživatele jednou (pro všechny sekce)
+    try:
+        users_response = supabase.table('app_users')\
+                         .select("username, name, role, email")\
+                         .execute()
+        users = users_response.data or []
+    except Exception as e:
+        st.error(f"Chyba při načítání uživatelů: {e}")
+        users = []
+
+    # 1. Přidat nového uživatele
     st.subheader("Přidat nového uživatele")
     col1, col2 = st.columns(2)
     with col1:
@@ -43,16 +53,13 @@ else:
         else:
             try:
                 success, message = add_user(
-                username=new_username.strip(),
-                name=new_name.strip(),
-                password=default_pw,
-                role=new_role,
-                email=new_email.strip()
+                    username=new_username.strip(),
+                    name=new_name.strip(),
+                    password=default_pw,
+                    role=new_role,
+                    email=new_email.strip()
                 )
-                st.toast("Uživatel přidán.")
-                time.sleep(0.5)
                 if success:
-                    st.toast("Uživatel přidán.")
                     st.success(message)
                     st.rerun()
                 else:
@@ -60,70 +67,70 @@ else:
             except Exception as e:
                 st.error(f"Neočekávaná chyba při přidávání uživatele: {e}")
 
+    # 2. Resetovat heslo uživatele
     st.subheader("Resetovat heslo uživatele")
-    try:
-        users_response = supabase.table('app_users')\
-                        .select("username, name")\
-                        .execute()
-        
-        if users_response.data:
-            user_options = [f"{row['username']} ({row['name']})" for row in users_response.data]
-            selected_user_str = st.selectbox("Vyberte uživatele k resetu hesla", user_options, key="reset_user_select")
-            
-            if selected_user_str:
-                selected_username = selected_user_str.split(" (")[0]
-                
-                agree_reset = st.checkbox(f"Potvrzuji reset hesla uživatele **{selected_username}** na '1234'")
-                if st.button("Resetovat heslo na 1234", type="primary", disabled=not agree_reset):
-                    try:
-                        success, message = reset_password(selected_username)
-                        st.toast(f"Heslo uživatele **{selected_username}** bylo resetovánona '1234'")
-                        time.sleep(0.5)
-                        if success:
-                            st.success(message)
-                            st.rerun()
-                        else:
-                            st.error(message)
-                    except Exception as e:
-                        st.error(f"Chyba při resetu hesla: {e}")
-        else:
-            st.info("Žádní uživatelé v databázi.")
-    except Exception as e:
-        st.error(f"Chyba při načítání uživatelů pro reset: {e}")
-
-    st.subheader("Aktuální uživatelé")
-    st.markdown("### Smazání uživatele (neodvolatelné!)")
-
-# Výběr uživatele k smazání
-user_options = []  # naplníš z DB
-try:
-    users = supabase.table('app_users')\
-             .select("username, name")\
-             .execute().data
-
     if users:
         user_options = [f"{u['username']} ({u['name']})" for u in users]
+        selected_user_str = st.selectbox("Vyberte uživatele k resetu hesla", user_options, key="reset_user_select")
+        
+        if selected_user_str:
+            selected_username = selected_user_str.split(" (")[0]
+            
+            agree_reset = st.checkbox(f"Potvrzuji reset hesla uživatele **{selected_username}** na '1234'")
+            if st.button("Resetovat heslo na 1234", type="primary", disabled=not agree_reset):
+                try:
+                    success, message = reset_password(selected_username)
+                    if success:
+                        st.success(message)
+                        st.rerun()
+                    else:
+                        st.error(message)
+                except Exception as e:
+                    st.error(f"Chyba při resetu hesla: {e}")
+    else:
+        st.info("Žádní uživatelé v databázi.")
+
+    # 3. Aktuální uživatelé + Smazání uživatele
+    st.subheader("Aktuální uživatelé")
+    if users:
+        df_users = pd.DataFrame(users)
+        df_users = df_users.rename(columns={
+            "username": "Uživatelské jméno",
+            "name": "Jméno",
+            "role": "Role",
+            "email": "Email"
+        })
+        st.dataframe(df_users, use_container_width=True)
+    else:
+        st.info("V databázi zatím nejsou žádní uživatelé.")
+
+    # Smazání uživatele (pod seznamem)
+    st.markdown("### Smazání uživatele (neodvolatelné!)")
+    if users:
         selected_user_str = st.selectbox("Vyberte uživatele k smazání", user_options, key="delete_user_select")
         
         if selected_user_str:
-            selected_username = selected_user_str.split(" (")[0]  # extrahujeme username
-
-            # Potvrzení (dvoufázové, bezpečné)
-            agree = st.checkbox(f"Potvrzuji trvalé smazání uživatele **{selected_username}** (nelze vrátit)")
+            selected_username = selected_user_str.split(" (")[0]
             
-            if st.button("SMAZAT UŽIVATELE", type="primary", disabled=not agree):
-                success, message = delete_user(selected_username)
-                if success:
-                    st.success(message)
-                    st.rerun()  # aktualizace seznamu
-                else:
-                    st.error(message)
+            agree_delete = st.checkbox(f"Potvrzuji trvalé smazání uživatele **{selected_username}** (nelze vrátit)")
+            
+            if st.button("SMAZAT UŽIVATELE", type="primary", disabled=not agree_delete):
+                try:
+                    response = supabase.table('app_users')\
+                               .delete()\
+                               .eq("username", selected_username)\
+                               .execute()
+                    if response.data:
+                        st.success(f"Uživatel '{selected_username}' byl úspěšně smazán.")
+                        st.rerun()
+                    else:
+                        st.error("Uživatel nenalezen nebo smazání selhalo.")
+                except Exception as e:
+                    st.error(f"Chyba při mazání uživatele: {e}")
     else:
         st.info("Žádní uživatelé k smazání.")
-except Exception as e:
-    st.error(f"Chyba při načítání uživatelů: {e}")
 
-
+    # 4. Smazání celého projektu (zachováno)
     st.markdown("### Smazání celého projektu (neodvolatelné!)")
     project_choices = get_project_choices()
     if project_choices:
@@ -138,7 +145,7 @@ except Exception as e:
                 proj_name = pname
                 break
         
-        st.warning(f"**Pozor!** Bude smazán projekt **{proj_to_delete} – {proj_name}** včetně všech úkolů, závislostí a historie. Akce nelze vrátit!")
+        st.warning(f"**Pozor!** Bude smazán projekt **{proj_to_delete} – {proj_name}** včetně všech úkolů a historie. Akce nelze vrátit!")
         
         agree_delete = st.checkbox("Potvrzuji trvalé smazání projektu i s úkoly")
         if st.button("SMAZAT CELÝ PROJEKT", type="primary", disabled=not agree_delete):
