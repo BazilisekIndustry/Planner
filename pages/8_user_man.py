@@ -50,7 +50,6 @@ else:
                 )
                 if success:
                     st.success(message)
-                    load_users_from_db.clear()
                     st.rerun()
                 else:
                     st.error(message)
@@ -76,7 +75,6 @@ else:
                         success, message = reset_password(selected_username)
                         if success:
                             st.success(message)
-                            load_users_from_db.clear()
                             st.rerun()
                         else:
                             st.error(message)
