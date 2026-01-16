@@ -49,6 +49,7 @@ else:
                     email=new_email.strip()
                 )
                 if success:
+                    st.toast("Uživatel přidán.")
                     st.success(message)
                     st.rerun()
                 else:
@@ -74,6 +75,7 @@ else:
                     try:
                         success, message = reset_password(selected_username)
                         if success:
+                            st.toast("Heslo uživatele **{selected_username}** bylo resetovánona '1234'")
                             st.success(message)
                             st.rerun()
                         else:
