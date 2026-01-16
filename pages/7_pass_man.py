@@ -41,7 +41,7 @@ if st.button("Změnit heslo", type="primary"):
                 st.success(message + " Nyní se prosím odhlašte a přihlaste znovu s novým heslem.")
                 # Volitelně: automatické odhlášení po 3 sekundách
                 if st.button("Odhlásit se nyní"):
-                    authenticator.logout('Odhlásit se', location='main')
+                    logout()
             else:
                 st.error(message or "Chyba při změně hesla – zkuste to znovu.")
         except Exception as e:

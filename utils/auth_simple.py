@@ -12,15 +12,13 @@ COOKIE_NAME = "planner_user_session_v3"
 
 def authenticate_user(username: str, password: str):
     username = username.strip()
-    st.write(f"DEBUG: Přihlašuji '{username}'")
+    st.write(f"Přihlašuji **{username}**")
 
     try:
         response = supabase.table('app_users')\
                    .select("username, name, role, password_hash")\
                    .eq("username", username)\
                    .execute()
-
-        st.write(f"DEBUG: Supabase odpověď: {response.data}")
 
         if not response.data:
             st.error("Uživatel nenalezen.")
@@ -31,7 +29,6 @@ def authenticate_user(username: str, password: str):
         input_password = password.encode('utf-8')
 
         if bcrypt.checkpw(input_password, stored_hash):
-            st.write("DEBUG: Heslo sedí!")
             return {
                 "username": user['username'],
                 "name": user['name'],

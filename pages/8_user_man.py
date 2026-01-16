@@ -77,7 +77,7 @@ else:
                 if st.button("Resetovat heslo na 1234", type="primary", disabled=not agree_reset):
                     try:
                         success, message = reset_password(selected_username)
-                        st.toast("Heslo uživatele **{selected_username}** bylo resetovánona '1234'")
+                        st.toast(f"Heslo uživatele **{selected_username}** bylo resetovánona '1234'")
                         time.sleep(0.5)
                         if success:
                             st.success(message)

@@ -6,21 +6,6 @@ from utils.common import supabase
 
 st.set_page_config(page_title="Plánovač – Přihlášení", layout="wide")
 # Na konec Home.py (před login formulářem)
-if st.button("DEBUG: Přehashovat admina na 1234 (jen jednou!)"):
-    heslo = "1234"
-    temp = {"usernames": {"admin": {"password": heslo}}}
-    Hasher.hash_passwords(temp)
-    novy_hash = temp["usernames"]["admin"]["password"]
-    
-    try:
-        supabase.table('app_users')\
-                .update({"password_hash": novy_hash})\
-                .eq("username", "admin")\
-                .execute()
-        st.success(f"Admin heslo přehashováno na 1234! Můžeš se přihlásit.")
-        st.write("Nový hash:", novy_hash)
-    except Exception as e:
-        st.error(f"Chyba při update: {e}")
 
 if check_login():
     st.success("Již přihlášen – přesměrovávám...")
