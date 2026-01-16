@@ -25,6 +25,11 @@ else:
         st.subheader("Přidat projekt")
         proj_id = st.text_input("Číslo projektu (povinné)", key="new_proj_id")
         proj_name = st.text_input("Název projektu (volitelné)", key="new_proj_name")
+        colors_list = get_safe_project_colors()
+        color_labels = [label for label, _ in colors_list]
+        selected_label = st.selectbox("Barva projektu", color_labels, index=0)
+        selected_color = next(color for label, color in colors_list if label == selected_label)
+        
         if st.button("Přidat projekt"):
             if proj_id.strip():
                 try:

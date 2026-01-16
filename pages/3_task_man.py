@@ -135,42 +135,52 @@ else:
             allow_unsafe_jscode=False
         )
 
-        updated_df = grid_response['data']
-        changes_made = False
-
-        for _, row in updated_df.iterrows():
-            task_id = row['ID']
-            new_start_raw = row['Začátek']
-            new_start_str = str(new_start_raw).strip() if pd.notna(new_start_raw) else ""
-            task = get_task(task_id)
-            original_start = yyyymmdd_to_ddmmyyyy(task['start_date']) if task['start_date'] else ""
-
-            if new_start_str == original_start:
-                continue
-
-            if not new_start_str:
-                try:
-                    update_task(task_id, 'start_date', None)
-                    recalculate_from_task(task_id)
-                    changes_made = True
-                except Exception as e:
-                    st.error(f"Chyba při vymazání data u úkolu {task_id}: {e}")
-                continue
-
-            if not validate_ddmmyyyy(new_start_str):
-                st.error(f"Neplatné datum u úkolu {task_id}: '{new_start_str}'. Použijte např. 1.1.2026 nebo 15.03.2025")
-                continue
-
+    updated_df = grid_response['data']
+    changes_made = False
+    for idx, row in updated_df.iterrows():  # Změna na iterrows() pro idx
+        task_id = row['ID']
+        new_start_raw = row['Začátek']
+        new_start_str = str(new_start_raw).strip() if pd.notna(new_start_raw) else ""
+        task = get_task(task_id)
+        original_start = yyyymmdd_to_ddmmyyyy(task['start_date']) if task['start_date'] else ""
+        if new_start_str == original_start:
+            continue
+        if not new_start_str:
             try:
-                update_task(task_id, 'start_date', new_start_str)
+                update_task(task_id, 'start_date', None)
                 recalculate_from_task(task_id)
                 changes_made = True
             except Exception as e:
-                st.error(f"Chyba při úpravě data u úkolu {task_id}: {e}")
-
-        if changes_made:
-            st.success("Změny uloženy a termíny přepočítány.")
-            st.rerun()
+                st.error(f"Chyba při vymazání data u úkolu {task_id}: {e}")
+            continue
+        if not validate_ddmmyyyy(new_start_str):
+            st.error(f"Neplatné datum u úkolu {task_id}: '{new_start_str}'. Použijte např. 1.1.2026 nebo 15.03.2025")
+            continue
+        # Nový check kolize v projektu před updatem
+        try:
+            new_yyyymmdd = ddmmyyyy_to_yyyymmdd(new_start_str)
+            temp_end = calculate_end_date(new_yyyymmdd, task['hours'], task['capacity_mode'])
+            existing_in_project = supabase.table('tasks').select('id, start_date, end_date').eq('project_id', task['project_id']).eq('workplace_id', task['workplace_id']).neq('id', task_id).not_.is_('start_date', 'null').not_.is_('end_date', 'null').execute().data
+            new_start_date = datetime.strptime(new_yyyymmdd, '%Y-%m-%d').date()
+            new_end_date = datetime.strptime(temp_end, '%Y-%m-%d').date()
+            conflict_in_project = False
+            for ex in existing_in_project:
+                ex_start = datetime.strptime(ex['start_date'], '%Y-%m-%d').date()
+                ex_end = datetime.strptime(ex['end_date'], '%Y-%m-%d').date()
+                if not (new_end_date < ex_start or new_start_date > ex_end):
+                    conflict_in_project = True
+                    break
+            if conflict_in_project:
+                st.error(f"Kolize v rámci projektu u úkolu {task_id} na tomto pracovišti. Upravte datum a zkuste znovu.")
+                continue
+            update_task(task_id, 'start_date', new_start_str)
+            recalculate_from_task(task_id)
+            changes_made = True
+        except Exception as e:
+            st.error(f"Chyba při úpravě data u úkolu {task_id}: {e}")
+    if changes_made:
+        st.success("Změny uloženy a termíny přepočítány.")
+        st.rerun()
 
         if tasks:
             st.markdown("### Změna stavu úkolu")

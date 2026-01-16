@@ -179,8 +179,62 @@ def init_db():
     pass
 
 def get_projects():
-    response = supabase.table('projects').select('id, name').execute()
-    return [(row['id'], row['name']) for row in response.data]
+    response = supabase.table('projects').select('id, name, color').execute()
+    return [(row['id'], row['name'], row.get('color', '#4285F4')) for row in response.data]
+
+def get_safe_project_colors():
+    return [
+        ('Modrá klasická',    '#4285F4'),
+        ('Tmavě modrá',       '#1A237E'),
+        ('Fialová',           '#9C27B0'),
+        ('Tmavě fialová',     '#4A148C'),
+        ('Indigo',            '#3F51B5'),
+        ('Tmavě šedá modrá',  '#455A64'),
+        ('Žlutá',             '#FFEB3B'),
+        ('Oranžová',          '#FF9800'),
+        ('Tmavě oranžová',    '#E65100'),
+        ('Hnědá',             '#795548'),
+        ('Tmavě hnědá',       '#4E342E'),
+        ('Šedá',              '#9E9E9E'),
+        ('Tmavě šedá',        '#424242'),
+        ('Tyrkysová',         '#00BCD4'),
+        ('Tmavě tyrkysová',   '#006064'),
+        ('Růžová',            '#E91E63'),
+        ('Tmavě růžová',      '#880E4F'),
+        ('Zelenkavá modrá',   '#009688'),   # lehce zelená, ale ne čistá zelená
+        ('Tmavě zelenkavá',   '#004D40'),
+        ('Teplá šedá',        '#757575'),
+    ]
+
+def detect_collisions_in_month(tasks_in_month):
+    # Seskupit tasks po workplace_id
+    from collections import defaultdict
+    wp_groups = defaultdict(list)
+    for t in tasks_in_month:
+        wp_groups[t['workplace_id']].append(t)
+    
+    collisions = {}  # tid: [colliding_pids]
+    for wp_id, group in wp_groups.items():
+        # Sortovat podle start_date
+        group.sort(key=lambda x: datetime.strptime(x['start_date'], '%Y-%m-%d'))
+        for i in range(len(group)):
+            t1 = group[i]
+            t1_start = datetime.strptime(t1['start_date'], '%Y-%m-%d').date()
+            t1_end = datetime.strptime(t1['end_date'], '%Y-%m-%d').date()
+            colliding = []
+            for j in range(i+1, len(group)):
+                t2 = group[j]
+                t2_start = datetime.strptime(t2['start_date'], '%Y-%m-%d').date()
+                if t2_start > t1_end:
+                    break  # Protože sorted, dál nebude překryv
+                t2_end = datetime.strptime(t2['end_date'], '%Y-%m-%d').date()
+                if not (t1_end < t2_start or t1_start > t2_end):
+                    if t1['project_id'] != t2['project_id']:
+                        colliding.append(t2['project_id'])
+            if colliding:
+                collisions[t1['id']] = list(set(colliding))
+    
+    return collisions
 
 def get_project_choices():
     projects = get_projects()
@@ -210,9 +264,13 @@ def delete_workplace(wp_id):
     supabase.table('workplaces').delete().eq('id', wp_id).execute()
     return True
 
-def add_project(project_id, name):
+def add_project(project_id, name, color):
     try:
-        supabase.table('projects').insert({'id': project_id, 'name': name}).execute()
+        supabase.table('projects').insert({
+            'id': project_id,
+            'name': name,
+            'color': color
+        }).execute()
         return True
     except Exception:
         return False
