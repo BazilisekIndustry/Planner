@@ -92,7 +92,7 @@ else:
         st.error(f"Chyba při načítání uživatelů pro reset: {e}")
 
     st.subheader("Aktuální uživatelé")
-    t.markdown("### Smazání uživatele (neodvolatelné!)")
+    st.markdown("### Smazání uživatele (neodvolatelné!)")
 
 # Výběr uživatele k smazání
 user_options = []  # naplníš z DB
