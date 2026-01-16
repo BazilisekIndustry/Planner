@@ -1,6 +1,6 @@
 streamlit
 streamlit-authenticator
-streamlit-cookies-manager
+streamlit-cookies-controller
 pyyaml
 reportlab
 plotly
