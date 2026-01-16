@@ -402,6 +402,42 @@ def delete_project(project_id):
 # ============================
 # USER MANAGEMENT FUNKCE – vše přes Supabase
 # ============================
+
+def delete_user(username: str):
+    """
+    Smaže uživatele z tabulky app_users podle username.
+    Vrátí (True, "Úspěch") nebo (False, "Chyba / zpráva")
+    """
+    if not username.strip():
+        return False, "Uživatelské jméno je prázdné."
+
+    try:
+        # 1. Najdi, jestli uživatel existuje (pro lepší zprávu)
+        check = supabase.table('app_users')\
+                 .select("username")\
+                 .eq("username", username)\
+                 .execute()
+
+        if not check.data:
+            return False, f"Uživatel '{username}' neexistuje."
+
+        # 2. Smaž uživatele
+        response = supabase.table('app_users')\
+                   .delete()\
+                   .eq("username", username)\
+                   .execute()
+
+        if response.data:
+            # Vyčisti cache (pokud máš cachovanou funkci)
+            # load_users_from_db.clear()  # ← odkomentuj jen pokud máš @st.cache_data
+
+            return True, f"Uživatel '{username}' byl úspěšně smazán."
+        else:
+            return False, "Smazání selhalo (žádný řádek nebyl ovlivněn)."
+
+    except Exception as e:
+        return False, f"Chyba při mazání uživatele: {str(e)}"
+    
 def add_user(username, name, password, role, email=""):
     try:
         count_response = supabase.table('app_users').select("count", count="exact").execute()

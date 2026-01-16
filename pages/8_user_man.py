@@ -92,23 +92,37 @@ else:
         st.error(f"Chyba při načítání uživatelů pro reset: {e}")
 
     st.subheader("Aktuální uživatelé")
-    try:
-        users_response = supabase.table('app_users')\
-                           .select("username, name, role, email")\
-                           .execute()
-        if users_response.data:
-            df_users = pd.DataFrame(users_response.data)
-            df_users = df_users.rename(columns={
-                "username": "Uživatelské jméno",
-                "name": "Jméno",
-                "role": "Role",
-                "email": "Email"
-            })
-            st.dataframe(df_users, width='stretch')
-        else:
-            st.info("V databázi zatím nejsou žádní uživatelé.")
-    except Exception as e:
-        st.error(f"Chyba při načítání seznamu uživatelů: {e}")
+    t.markdown("### Smazání uživatele (neodvolatelné!)")
+
+# Výběr uživatele k smazání
+user_options = []  # naplníš z DB
+try:
+    users = supabase.table('app_users')\
+             .select("username, name")\
+             .execute().data
+
+    if users:
+        user_options = [f"{u['username']} ({u['name']})" for u in users]
+        selected_user_str = st.selectbox("Vyberte uživatele k smazání", user_options, key="delete_user_select")
+        
+        if selected_user_str:
+            selected_username = selected_user_str.split(" (")[0]  # extrahujeme username
+
+            # Potvrzení (dvoufázové, bezpečné)
+            agree = st.checkbox(f"Potvrzuji trvalé smazání uživatele **{selected_username}** (nelze vrátit)")
+            
+            if st.button("SMAZAT UŽIVATELE", type="primary", disabled=not agree):
+                success, message = delete_user(selected_username)
+                if success:
+                    st.success(message)
+                    st.rerun()  # aktualizace seznamu
+                else:
+                    st.error(message)
+    else:
+        st.info("Žádní uživatelé k smazání.")
+except Exception as e:
+    st.error(f"Chyba při načítání uživatelů: {e}")
+
 
     st.markdown("### Smazání celého projektu (neodvolatelné!)")
     project_choices = get_project_choices()
