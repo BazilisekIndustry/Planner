@@ -42,12 +42,13 @@ else:
         else:
             try:
                 success, message = add_user(
-                    username=new_username.strip(),
-                    name=new_name.strip(),
-                    password=default_pw,
-                    role=new_role,
-                    email=new_email.strip()
+                username=new_username.strip(),
+                name=new_name.strip(),
+                password=default_pw,
+                role=new_role,
+                email=new_email.strip()
                 )
+                st.toast("Uživatel přidán.")
                 if success:
                     st.toast("Uživatel přidán.")
                     st.success(message)
@@ -74,8 +75,9 @@ else:
                 if st.button("Resetovat heslo na 1234", type="primary", disabled=not agree_reset):
                     try:
                         success, message = reset_password(selected_username)
+                        st.toast("Heslo uživatele **{selected_username}** bylo resetovánona '1234'")
+
                         if success:
-                            st.toast("Heslo uživatele **{selected_username}** bylo resetovánona '1234'")
                             st.success(message)
                             st.rerun()
                         else:
