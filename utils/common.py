@@ -245,7 +245,17 @@ def detect_collisions_in_month(tasks_in_month):
 def get_project_choices():
     projects = get_projects()
     return [str(p[0]) for p in projects] if projects else []
-
+def log_action(user, action, task_id, details):
+    try:
+        supabase.table('logs').insert({
+            'user': user,
+            'action': action,
+            'task_id': task_id,
+            'details': details
+        }).execute()
+    except Exception as e:
+        # Pokud nechceš, aby logování blokovalo app, jen vypíše chybu (nebo ji ignoruj)
+        print(f"Chyba při logování: {e}")
 def get_workplaces():
     response = supabase.table('workplaces').select('id, name').execute()
     return [(row['id'], row['name']) for row in response.data]
