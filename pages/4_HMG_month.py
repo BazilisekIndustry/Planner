@@ -64,6 +64,7 @@ for t in all_tasks:
 collisions = detect_collisions_in_month(tasks_in_month)
 
 # Příprava dat pro graf
+# Příprava dat pro graf – opravená verze
 plot_data = []
 for t in tasks_in_month:
     pid = t['project_id']
@@ -71,42 +72,32 @@ for t in tasks_in_month:
     end_date = datetime.strptime(t['end_date'], '%Y-%m-%d').date()
     proj = projects.get(pid, {'name': f'P{pid}', 'color': '#4285F4'})
     task_text = proj['name']
-    original_color = proj['color']
-    display_color = original_color
-    text_color = '#000000'
+    color = proj['color']  # ← VŽDY původní barva projektu
+    text_color = '#000000'  # default černý text
 
-    # Detekce kolizí (všechny překryvy na pracovišti)
+    # Detekce kolizí (překryv s jakýmkoliv jiným úkolem na stejném pracovišti)
     colliding = collisions.get(t['id'], [])
-    
     if colliding:
-        # Kolize → červená, bílý text
-        display_color = "#EA4335"
-        text_color = '#FFFFFF'
-    elif t.get('status') == 'done':
-        # Hotovo → zelená
-        display_color = "#34A853"
-        text_color = '#000000'  # nebo '#FFFFFF' podle preference
+        color = "#EA4335"  # červená jen při kolizi
+        text_color = '#FFFFFF'  # bílý text pro lepší čitelnost
 
     # Tooltip s původní barvou + kolizemi
     coll_str = []
     if colliding:
-        for i, coll_id in enumerate(colliding):
-            if i >= 5:
-                coll_str.append("...a další")
-                break
+        for coll_id in colliding[:5]:
             coll_task = get_task(coll_id)
             if coll_task:
                 coll_pid = coll_task['project_id']
-                coll_name = projects.get(coll_pid, {'name': f'P{coll_pid}'})['name']
-                coll_str.append(f"P{coll_pid} ({coll_name})")
+                coll_proj = projects.get(coll_pid, {'name': f'P{coll_pid}'})
+                coll_str.append(f"{coll_proj['name']} ({coll_pid})")
+        if len(colliding) > 5:
+            coll_str.append("...a další")
 
     tooltip = (
         f"<b>{task_text}</b><br>"
-        f"Projektová barva: <span style='color:{original_color}; font-weight:bold'>■ {original_color}</span><br>"
+        f"Projektová barva: <span style='color:{proj['color']}; font-weight:bold'>■ {proj['color']}</span><br>"
         f"Od: %{{x|%d.%m.%Y}}<br>Do: %{{x2|%d.%m.%Y}}"
     )
-    if t.get('status') == 'done':
-        tooltip += "<br><b>Stav:</b> hotovo"
     if coll_str:
         tooltip += f"<br><b>Kolize s:</b> {', '.join(coll_str)}"
 
@@ -115,15 +106,18 @@ for t in tasks_in_month:
         "Úkol": task_text,
         "Start": max(start_date, first_day),
         "Finish": min(end_date, last_day) + timedelta(days=1),
-        "Color": display_color,
+        "Color": color,
         "Tooltip": tooltip,
         "TextColor": text_color
     })
 
-if not plot_data:
-    st.info(f"Žádné úkoly v {calendar.month_name[selected_month]} {selected_year}.")
-else:
+# Vytvoření grafu
+if plot_data:
     df = pd.DataFrame(plot_data)
+    
+    # Explicitně definujeme barvy, aby Plotly nepřepisoval
+    color_map = {c: c for c in df["Color"].unique()}  # každá barva sama sebe
+    
     fig = px.timeline(
         df,
         x_start="Start",
@@ -132,15 +126,20 @@ else:
         color="Color",
         text="Úkol",
         hover_name="Úkol",
+        color_discrete_map=color_map,  # ← klíčové – nutí použít přesné hex barvy
         title=f"HMG HK – {calendar.month_name[selected_month]} {selected_year}",
         height=400 + len(workplaces_set) * 40
     )
+
     fig.update_traces(
-        opacity=0.7,
+        opacity=0.85,
         textposition='inside',
         textfont_color=df["TextColor"].tolist(),
         hovertemplate=df["Tooltip"].tolist(),
+        marker_line_width=1,
+        marker_line_color="black"
     )
+
     fig.update_xaxes(
         tickformat="%d",
         tickmode="linear",
@@ -148,7 +147,7 @@ else:
         range=[first_day, last_day + timedelta(days=1)]
     )
     fig.update_yaxes(autorange="reversed")
-    fig.update_layout(bargap=0.2, bargroupgap=0.1, showlegend=False)
+    fig.update_layout(bargap=0.18, bargroupgap=0.08, showlegend=False)
 
     # Víkendy a svátky – červené dashed line + annotation
     holidays = get_holidays(selected_year)
