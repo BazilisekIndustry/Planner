@@ -71,7 +71,7 @@ for t in tasks_in_month:
     end_date = datetime.strptime(t['end_date'], '%Y-%m-%d').date()
     proj = projects.get(pid, {'name': f'P{pid}', 'color': '#4285F4'})
     task_text = proj['name']
-    original_color = proj['color']  # ← původní barva projektu
+    original_color = proj['color']  # původní barva projektu
     display_color = original_color
     text_color = '#000000'
 
@@ -146,20 +146,36 @@ else:
     fig.update_yaxes(autorange="reversed")
     fig.update_layout(bargap=0.2, bargroupgap=0.1, showlegend=False)
 
-    # Víkendy a svátky – červené dashed vline
+    # Víkendy a svátky – červené dashed line + annotation
     holidays = get_holidays(selected_year)
     current = first_day
     while current <= last_day:
         if is_weekend_or_holiday(current):
             label = "S" if current in holidays else "V"
-            fig.add_vline(
-                x=current.isoformat(),          # ← klíčová změna
-                line_dash="dash",
-                line_color="red",
-                opacity=0.5,
-                annotation_text=label,
-                annotation_position="top"
+            
+            # Přidání čáry jako shape
+            fig.add_shape(
+                type="line",
+                x0=current,
+                y0=0,
+                x1=current,
+                y1=1,
+                xref="x",
+                yref="paper",
+                line=dict(color="red", dash="dash", width=1),
+                opacity=0.5
             )
+            
+            # Přidání annotation samostatně
+            fig.add_annotation(
+                x=current,
+                y=1.05,
+                text=label,
+                showarrow=False,
+                yref="paper",
+                font=dict(color="red", size=10)
+            )
+        
         current += timedelta(days=1)
 
     st.plotly_chart(fig, use_container_width=True)
