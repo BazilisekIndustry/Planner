@@ -95,11 +95,18 @@ for t in tasks_in_month:
                 coll_name = projects.get(coll_pid, {'name': f'P{coll_pid}'})['name']
                 coll_str.append(coll_name)
 
+    # Zkontrolujeme, jestli je mezi kolizemi jiný projekt
+        has_cross_project_collision = any(
+            get_task(coll_id)['project_id'] != pid for coll_id in colliding
+        )
+        if has_cross_project_collision:
+            task_text += " !"                
+
     tooltip = (
-        f"<b>{proj['name']}</b><br>"  # správný název projektu
-        f"Projektová barva: <span style='color:{original_color}; font-weight:bold'>■ {original_color}</span><br>"
-        f"Od: {start_date.strftime('%d.%m.%Y')}<br>"  # opravený formát termínů
-        f"Do: {end_date.strftime('%d.%m.%Y')}"
+    f"<b>{proj['name']}</b><br>"
+    f"Projektová barva: <span style='color:{original_color}; font-weight:bold'>■ {original_color}</span><br>"
+    f"Od: {start_date.strftime('%d.%m.%Y')}<br>"
+    f"Do: {end_date.strftime('%d.%m.%Y') if end_date else 'není definován'}"
     )
     if coll_str:
         tooltip += f"<br><b>Kolize s:</b> {', '.join(coll_str)}"
@@ -149,17 +156,27 @@ else:
     # Víkendy a svátky – červené dashed vline
     holidays = get_holidays(selected_year)
     current = first_day
+    epoch = date(1970, 1, 1)  # referenční bod, který Plotly interně používá
+
     while current <= last_day:
         if is_weekend_or_holiday(current):
             label = "S" if current in holidays else "V"
+            
+            # Klíč: počet dní od 1970-01-01
+            x_num = (current - epoch).days
+            
             fig.add_vline(
-                x=current,
+                x=x_num,                    # ← čisté číslo, žádný date, žádný string
                 line_dash="dash",
                 line_color="red",
-                opacity=0.5,
+                line_width=1.2,
+                opacity=0.6,
                 annotation_text=label,
-                annotation_position="top"
+                annotation_position="top",
+                annotation_font_size=10,
+                annotation_font_color="red"
             )
+        
         current += timedelta(days=1)
 
     st.plotly_chart(fig, use_container_width=True)
