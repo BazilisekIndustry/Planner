@@ -172,12 +172,13 @@ for wp in sorted(tasks_by_wp.keys()):
 
         plot_data.append({
             "Pracoviště": y_prac,
-            "Úkol": task_text,  # název s ! při kolizi
+            "Úkol": task_text,
             "Start": max(start_date, first_day),
             "Finish": min(end_date, last_day) + timedelta(days=1),
             "Color": display_color,
-            "Tooltip": tooltip,
-            "TextColor": text_color
+            "TextColor": text_color,
+            "FullTooltip": tooltip,        # ← NOVÉ
+            "TaskID": t['id']              # ← pro případný debug
         })
 
 if not plot_data:
@@ -192,16 +193,18 @@ else:
         y="Pracoviště",
         color="Color",
         text="Úkol",
-        hover_name="Úkol",
+        hover_name=None,                    # vypneme výchozí
         color_discrete_map=color_map,
         title=f"HMG HK – {calendar.month_name[selected_month]} {selected_year}",
-        height=400 + total_rows * 40
+        height=400 + total_rows * 40,
+        custom_data=["FullTooltip"]         # ← DŮLEŽITÉ
     )
     fig.update_traces(
         opacity=0.7,
         textposition='inside',
         textfont_color=df["TextColor"].tolist(),
-        hovertemplate=df["Tooltip"].tolist(),
+        hovertemplate="%{customdata[0]}",   # ← DŮLEŽITÉ – bere plný tooltip
+        hoverlabel=dict(bgcolor="white", font_size=12)
     )
     fig.update_xaxes(
         tickformat="%d",
