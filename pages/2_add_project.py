@@ -18,28 +18,39 @@ render_sidebar("Přidat projekt / úkol")
 
 st.header("Přidat projekt a úkol")
 
+# CSS pro modrá tlačítka (přepíše primary i normální)
+st.markdown("""
+    <style>
+        button[kind="primary"],
+        div.element-container:has(button[key^="btn_add_"]) button {
+            background-color: #0066cc !important;
+            color: white !important;
+            border: none !important;
+            border-radius: 6px !important;
+        }
+        button[kind="primary"]:hover,
+        div.element-container:has(button[key^="btn_add_"]) button:hover {
+            background-color: #0055b3 !important;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
 if role == "viewer":
     st.error("Tato stránka je dostupná jen pro administrátory a běžné uživatele.")
     st.stop()
 
-# ──────────────────────────────────────────────────────────────
-# ROZDĚLENÍ NA DVA SLOUPCE
-# ──────────────────────────────────────────────────────────────
 col1, col2 = st.columns([1, 1.4])
 
-# ──────────────────────────────
-# LEVÝ SLOUPEC – PŘIDAT PROJEKT
-# ──────────────────────────────
+# ─── PŘIDAT PROJEKT ─────────────────────────────────────────────
 with col1:
     st.subheader("Přidat projekt")
 
     proj_id = st.text_input("Číslo projektu (povinné)", key="new_proj_id")
     proj_name = st.text_input("Název projektu (volitelné)", key="new_proj_name")
 
-    colors_list = get_safe_project_colors()  # [ (label, hex), ... ]
+    colors_list = get_safe_project_colors()
     color_labels = [label for label, _ in colors_list]
 
-    # Čistý selectbox bez HTML v položkách
     selected_label = st.selectbox(
         "Barva projektu",
         options=color_labels,
@@ -47,13 +58,12 @@ with col1:
         key="new_project_color_select"
     )
 
-    # Najdeme vybranou barvu
     selected_color = next(
         (color for label, color in colors_list if label == selected_label),
-        "#4285F4"  # fallback
+        "#4285F4"
     )
 
-    # Barevný čtvereček + název barvy vedle sebe (Varianta A)
+    # Čtvereček vedle selectboxu
     st.markdown(
         f'''
         <div style="display: flex; align-items: center; gap: 12px; margin-top: -4px;">
@@ -71,12 +81,11 @@ with col1:
         unsafe_allow_html=True
     )
 
-    if st.button("Přidat projekt", type="primary", use_container_width=True):
+    if st.button("Přidat projekt", key="btn_add_project", use_container_width=True):
         proj_id_clean = proj_id.strip()
         if not proj_id_clean:
             st.error("Číslo projektu je povinné!")
         else:
-            # Kontrola existence
             exists = supabase.table("projects").select("id").eq("id", proj_id_clean).execute()
             if exists.data:
                 st.error(f"Projekt s číslem **{proj_id_clean}** již existuje!")
@@ -91,7 +100,6 @@ with col1:
                     if success:
                         st.session_state["project_added_success"] = True
                         st.session_state["project_added_id"] = proj_id_clean
-                        # Vyčištění formuláře
                         for key in ["new_proj_id", "new_proj_name", "new_project_color_select"]:
                             st.session_state.pop(key, None)
                         st.rerun()
@@ -100,7 +108,6 @@ with col1:
                 except Exception as e:
                     st.error(f"Chyba při přidávání projektu:\n{str(e)}")
 
-# Úspěšná hláška + balónky
 if st.session_state.get("project_added_success", False):
     pid = st.session_state["project_added_id"]
     st.success(f"Projekt **{pid}** byl úspěšně přidán! 🎉")
@@ -108,9 +115,7 @@ if st.session_state.get("project_added_success", False):
     del st.session_state["project_added_success"]
     st.session_state.pop("project_added_id", None)
 
-# ──────────────────────────────
-# PRAVÝ SLOUPEC – PŘIDAT ÚKOL
-# ──────────────────────────────
+# ─── PŘIDAT ÚKOL ─────────────────────────────────────────────────
 with col2:
     st.subheader("Přidat úkol")
 
@@ -182,7 +187,7 @@ with col2:
 
             notes = st.text_area("Poznámka", height=108)
 
-        submitted = st.form_submit_button("Přidat úkol", use_container_width=True, type="primary")
+        submitted = st.form_submit_button("Přidat úkol", key="btn_add_task", use_container_width=True)
 
         if submitted:
             if not project_id:
@@ -279,9 +284,7 @@ with col2:
                 except Exception as e:
                     st.error(f"Chyba při přidávání úkolu:\n{str(e)}")
 
-# ──────────────────────────────────────────────────────────────
-# POTVRZENÍ PŘI KOLIZI MEZI PROJEKTY
-# ──────────────────────────────────────────────────────────────
+# ─── POTVRZENÍ KOLIZE ───────────────────────────────────────────
 if st.session_state.get("show_collision_confirm", False):
     pending = st.session_state["pending_task_data"]
     colliding_str = ", ".join(map(str, st.session_state.get("colliding_projects", [])))
@@ -295,7 +298,7 @@ if st.session_state.get("show_collision_confirm", False):
 
     c1, c2 = st.columns(2)
     with c1:
-        if st.button("Ano, přidat přesto", type="primary"):
+        if st.button("Ano, přidat přesto", key="btn_confirm_collision", type="primary"):
             task_id = add_task(**pending)
             if task_id:
                 st.success("Úkol přidán i přes kolizi.")
@@ -316,15 +319,13 @@ if st.session_state.get("show_collision_confirm", False):
             st.rerun()
 
     with c2:
-        if st.button("Ne, zrušit"):
+        if st.button("Ne, zrušit", key="btn_cancel_collision"):
             st.info("Přidání úkolu zrušeno.")
             for k in ["pending_task_data", "colliding_projects", "show_collision_confirm"]:
                 st.session_state.pop(k, None)
             st.rerun()
 
-# ──────────────────────────────────────────────────────────────
-# ÚSPĚŠNÉ HLÁŠKY
-# ──────────────────────────────────────────────────────────────
+# ─── ÚSPĚŠNÉ HLÁŠKY ─────────────────────────────────────────────
 if st.session_state.get("task_added_success", False):
     d = st.session_state["task_added_details"]
     st.success(
