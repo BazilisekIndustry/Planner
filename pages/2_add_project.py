@@ -56,7 +56,7 @@ with col1:
     # Barevný čtvereček + název barvy vedle sebe (Varianta A)
     st.markdown(
         f'''
-        <div style="display: flex; align-items: center; gap: 12px; margin-top: -4px;">
+        <div style="display: flex; align-items: center; gap: 12px; margin-top: -4px; margin-bottom: 8px;">
             <div style="
                 width: 28px; 
                 height: 28px; 
