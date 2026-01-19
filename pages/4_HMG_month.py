@@ -190,14 +190,12 @@ else:
     # Víkendy a svátky – přidání šedého pozadí pro zvýraznění (nové)
     holidays = get_holidays(selected_year)
     current = first_day
-    epoch = date(1970, 1, 1)  # referenční bod, který Plotly interně používá
     while current <= last_day:
         if is_weekend_or_holiday(current):
             # Přidání šedého obdélníku pro celý sloupec (zvýraznění)
-            x_num = (current - epoch).days
             fig.add_vrect(
-                x0=x_num,
-                x1=x_num + 1,
+                x0=current,
+                x1=current + timedelta(days=1),
                 fillcolor="lightgray",
                 opacity=0.3,
                 layer="below",
@@ -207,7 +205,7 @@ else:
            
             # Zachování původní červené dashed vline
             fig.add_vline(
-                x=x_num,                    # ← čisté číslo, žádný date, žádný string
+                x=current,
                 line_dash="dash",
                 line_color="red",
                 line_width=1.2,
