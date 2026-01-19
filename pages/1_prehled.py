@@ -17,7 +17,7 @@ username = st.session_state.get("username", "neznámý")
 name = st.session_state.get("name", "Uživatel")
 role = st.session_state.get("role", "viewer")
 read_only = (role == "viewer")
-render_sidebar("Přehledový dassboard")
+render_sidebar("Přehledový dashboard")
 
 # Hlavní obsah
 st.header("Přehledový dashboard")
