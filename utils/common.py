@@ -616,6 +616,7 @@ def render_sidebar(current_page):
 
     # Mapování textu → název souboru (uprav si podle skutečných názvů tvých .py souborů!)
     page_map = {
+        "Přehledový dashboard": "pages/1_prehled.py",
         "Přidat projekt / úkol": "pages/2_add_project.py",
         "Prohlížet / Upravovat úkoly": "pages/3_task_man.py",
         "HMG měsíční": "pages/4_HMG_month.py",
