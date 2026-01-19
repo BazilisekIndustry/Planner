@@ -5,7 +5,7 @@ import pandas as pd
 import plotly.express as px
 from utils.common import *  # ← všechno ostatní (get_workplaces, is_working_day atd.)
 from utils.auth_simple import check_login, logout
-
+st.set_page_config(page_title="Plánovač HK", layout="wide")
 # Kontrola přihlášení (nový způsob)
 if not check_login():
     st.switch_page("Home.py")

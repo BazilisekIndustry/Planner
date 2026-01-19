@@ -6,7 +6,7 @@ from plotly import graph_objects as go  # Pro gauge ukazatel
 import plotly.express as px  # Pro heatmap
 from utils.auth_simple import check_login  # Předpokládám tvůj auth
 from utils.common import *  # Tvé funkce: supabase, get_workplaces, get_tasks, get_workplace_name, get_holidays, atd.
-
+st.set_page_config(page_title="Plánovač HK", layout="wide")
 # Kontrola přihlášení (nový způsob)
 if not check_login():
     st.switch_page("Home.py")

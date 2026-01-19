@@ -12,7 +12,7 @@ from reportlab.lib.units import inch
 from utils.auth_simple import check_login
 from utils.common import *
 from collections import defaultdict
-
+st.set_page_config(page_title="Plánovač HK", layout="wide")
 # Registrace fontu pro diakritiku v PDF
 try:
     pdfmetrics.registerFont(TTFont('DejaVu', 'DejaVuSans.ttf'))

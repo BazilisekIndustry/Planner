@@ -3,7 +3,7 @@ import streamlit as st
 from datetime import datetime
 from utils.auth_simple import check_login
 from utils.common import *
-
+st.set_page_config(page_title="Plánovač HK", layout="wide")
 # Kontrola přihlášení
 if not check_login():
     st.switch_page("Home.py")
