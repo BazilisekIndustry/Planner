@@ -207,32 +207,42 @@ def get_safe_project_colors():
     ]
 
 def detect_collisions_in_month(tasks_in_month):
-    # Seskupit tasks po workplace_id
+    """
+    Detekuje JAKÝKOLIV překryv úkolů na stejném pracovišti.
+    Vrátí pro každý task_id seznam ID úkolů, se kterými koliduje.
+    """
     from collections import defaultdict
+    
     wp_groups = defaultdict(list)
     for t in tasks_in_month:
         wp_groups[t['workplace_id']].append(t)
     
-    collisions = {}  # tid: [colliding_pids]
+    collisions = {}  # task_id → list kolizních task_id
+    
     for wp_id, group in wp_groups.items():
-        # Sortovat podle start_date
         group.sort(key=lambda x: datetime.strptime(x['start_date'], '%Y-%m-%d'))
+        
         for i in range(len(group)):
             t1 = group[i]
             t1_start = datetime.strptime(t1['start_date'], '%Y-%m-%d').date()
             t1_end = datetime.strptime(t1['end_date'], '%Y-%m-%d').date()
-            colliding = []
-            for j in range(i+1, len(group)):
+            
+            colliding_tasks = []
+            
+            for j in range(i + 1, len(group)):
                 t2 = group[j]
                 t2_start = datetime.strptime(t2['start_date'], '%Y-%m-%d').date()
+                
                 if t2_start > t1_end:
-                    break  # Protože sorted, dál nebude překryv
+                    break
+                
                 t2_end = datetime.strptime(t2['end_date'], '%Y-%m-%d').date()
+                
                 if not (t1_end < t2_start or t1_start > t2_end):
-                    if t1['project_id'] != t2['project_id']:
-                        colliding.append(t2['project_id'])
-            if colliding:
-                collisions[t1['id']] = list(set(colliding))
+                    colliding_tasks.append(t2['id'])
+            
+            if colliding_tasks:
+                collisions[t1['id']] = colliding_tasks
     
     return collisions
 

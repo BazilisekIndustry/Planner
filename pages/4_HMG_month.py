@@ -71,38 +71,42 @@ for t in tasks_in_month:
     end_date = datetime.strptime(t['end_date'], '%Y-%m-%d').date()
     proj = projects.get(pid, {'name': f'P{pid}', 'color': '#4285F4'})
     task_text = proj['name']
-    original_color = proj['color']  # původní barva projektu
+    original_color = proj['color']
     display_color = original_color
     text_color = '#000000'
 
-    # Priorita barev
-    status_text = ""
-    if t.get('status') == 'done':
-        display_color = "#34A853"  # zelená pro hotovo
-        status_text = " (hotovo)"
-    elif collisions.get(t['id'], []):
-        display_color = "#EA4335"  # červená pro kolizi
-        text_color = '#FFFFFF'
-
-    # Tooltip s původní barvou projektu + stavem
-    coll_str = []
+    # Detekce kolizí (všechny překryvy na pracovišti)
     colliding = collisions.get(t['id'], [])
+    
     if colliding:
-        for i, cp in enumerate(colliding):
+        # Kolize → červená, bílý text
+        display_color = "#EA4335"
+        text_color = '#FFFFFF'
+    elif t.get('status') == 'done':
+        # Hotovo → zelená
+        display_color = "#34A853"
+        text_color = '#000000'  # nebo '#FFFFFF' podle preference
+
+    # Tooltip s původní barvou + kolizemi
+    coll_str = []
+    if colliding:
+        for i, coll_id in enumerate(colliding):
             if i >= 5:
                 coll_str.append("...a další")
                 break
-            cname = projects.get(cp, {'name': f'P{cp}'})['name']
-            coll_str.append(f"P{cp} ({cname})")
+            coll_task = get_task(coll_id)
+            if coll_task:
+                coll_pid = coll_task['project_id']
+                coll_name = projects.get(coll_pid, {'name': f'P{coll_pid}'})['name']
+                coll_str.append(f"P{coll_pid} ({coll_name})")
 
     tooltip = (
         f"<b>{task_text}</b><br>"
         f"Projektová barva: <span style='color:{original_color}; font-weight:bold'>■ {original_color}</span><br>"
         f"Od: %{{x|%d.%m.%Y}}<br>Do: %{{x2|%d.%m.%Y}}"
     )
-
-    if status_text:
-        tooltip += f"<br><b>Stav:</b> {status_text}"
+    if t.get('status') == 'done':
+        tooltip += "<br><b>Stav:</b> hotovo"
     if coll_str:
         tooltip += f"<br><b>Kolize s:</b> {', '.join(coll_str)}"
 

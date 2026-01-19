@@ -140,11 +140,10 @@ else:
             key="admin_delete_project_select"
         )
         proj_name = "bez názvu"
-        for pid, pname in get_projects():
+        for pid, name, color in get_projects():
             if pid == proj_to_delete:
-                proj_name = pname
-                break
-        
+                proj_name = name
+                break   
         st.warning(f"**Pozor!** Bude smazán projekt **{proj_to_delete} – {proj_name}** včetně všech úkolů a historie. Akce nelze vrátit!")
         
         agree_delete = st.checkbox("Potvrzuji trvalé smazání projektu i s úkoly")
