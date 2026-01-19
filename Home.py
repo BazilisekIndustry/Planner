@@ -9,7 +9,7 @@ st.set_page_config(page_title="Plánovač – Přihlášení", layout="wide")
 
 if check_login():
     st.success("Již přihlášen – přesměrovávám...")
-    st.switch_page("pages/2_add_project.py")
+    st.switch_page("pages/1_prehled.py")
 else:
     st.title("Přihlášení do Plánovače Horkých komor")
     st.markdown("Vítejte! Přihlaste se prosím.")

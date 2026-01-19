@@ -603,6 +603,7 @@ def render_sidebar(current_page):
 
     # Seznam položek navigace
     options = [
+        "Přehledový dashboard",
         "Přidat projekt / úkol",
         "Prohlížet / Upravovat úkoly",
         "HMG měsíční",
