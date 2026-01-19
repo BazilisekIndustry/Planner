@@ -3,7 +3,7 @@ import time
 import streamlit as st
 from utils.common import *  # ← add_user, reset_password, delete_project, get_project_choices, get_projects atd.
 from utils.auth_simple import check_login, logout
-
+st.set_page_config(page_title="User managment", layout="wide")
 # Kontrola přihlášení
 if not check_login():
     st.switch_page("Home.py")
