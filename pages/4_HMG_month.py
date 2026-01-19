@@ -154,7 +154,7 @@ for wp in sorted(tasks_by_wp.keys()):
                     coll_name = projects.get(coll_pid, {'name': f'P{coll_pid}'})['name']
                     coll_str.append(coll_name)
 
-        # Zkontrolujeme, jestli je mezi kolizemi jiný projekt
+            # Zkontrolujeme, jestli je mezi kolizemi jiný projekt
             has_cross_project_collision = any(
                 get_task(coll_id)['project_id'] != pid for coll_id in colliding
             )
