@@ -217,7 +217,7 @@ def detect_collisions_in_month(tasks_in_month):
     for t in tasks_in_month:
         wp_groups[t['workplace_id']].append(t)
     
-    collisions = {}  # task_id → list kolizních task_id
+    collisions = defaultdict(list)  # task_id → list kolizních task_id
     
     for wp_id, group in wp_groups.items():
         group.sort(key=lambda x: datetime.strptime(x['start_date'], '%Y-%m-%d'))
@@ -226,8 +226,6 @@ def detect_collisions_in_month(tasks_in_month):
             t1 = group[i]
             t1_start = datetime.strptime(t1['start_date'], '%Y-%m-%d').date()
             t1_end = datetime.strptime(t1['end_date'], '%Y-%m-%d').date()
-            
-            colliding_tasks = []
             
             for j in range(i + 1, len(group)):
                 t2 = group[j]
@@ -239,10 +237,8 @@ def detect_collisions_in_month(tasks_in_month):
                 t2_end = datetime.strptime(t2['end_date'], '%Y-%m-%d').date()
                 
                 if not (t1_end < t2_start or t1_start > t2_end):
-                    colliding_tasks.append(t2['id'])
-            
-            if colliding_tasks:
-                collisions[t1['id']] = colliding_tasks
+                    collisions[t1['id']].append(t2['id'])
+                    collisions[t2['id']].append(t1['id'])
     
     return collisions
 
@@ -664,4 +660,3 @@ def render_sidebar(current_page):
     st.sidebar.markdown("---")
     st.sidebar.markdown("Plánovač Horkých komor v1.1")
     st.sidebar.caption("petr.svrcula@cvrez.cz")
-

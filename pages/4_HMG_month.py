@@ -145,11 +145,11 @@ for wp in sorted(tasks_by_wp.keys()):
         coll_str = []
         if colliding:
             for i, coll_id in enumerate(colliding):
-                if i >= 5:
+                if i >= 3:
                     coll_str.append("...a další")
                     break
                 coll_task = get_task(coll_id)
-                if coll_task:
+                if coll_task and coll_task['id'] != t['id']:
                     coll_pid = coll_task['project_id']
                     coll_name = projects.get(coll_pid, {'name': f'P{coll_pid}'})['name']
                     coll_str.append(coll_name)
