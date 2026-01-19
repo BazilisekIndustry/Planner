@@ -172,12 +172,13 @@ for wp in sorted(tasks_by_wp.keys()):
 
         plot_data.append({
             "Pracoviště": y_prac,
-            "Úkol": task_text,  # název s ! při kolizi
+            "Úkol": task_text,
             "Start": max(start_date, first_day),
             "Finish": min(end_date, last_day) + timedelta(days=1),
             "Color": display_color,
-            "Tooltip": tooltip,
-            "TextColor": text_color
+            "TextColor": text_color,
+            "FullTooltip": tooltip,        # ← NOVÉ
+            "TaskID": t['id']              # ← pro případný debug
         })
 
 if not plot_data:
@@ -192,16 +193,18 @@ else:
         y="Pracoviště",
         color="Color",
         text="Úkol",
-        hover_name="Úkol",
+        hover_name=None,                    # vypneme výchozí
         color_discrete_map=color_map,
         title=f"HMG HK – {calendar.month_name[selected_month]} {selected_year}",
-        height=400 + total_rows * 40
+        height=400 + total_rows * 40,
+        custom_data=["FullTooltip"]         # ← DŮLEŽITÉ
     )
     fig.update_traces(
         opacity=0.7,
         textposition='inside',
         textfont_color=df["TextColor"].tolist(),
-        hovertemplate=df["Tooltip"].tolist(),
+        hovertemplate="%{customdata[0]}",   # ← DŮLEŽITÉ – bere plný tooltip
+        hoverlabel=dict(bgcolor="white", font_size=12)
     )
     fig.update_xaxes(
         tickformat="%d",
@@ -265,19 +268,6 @@ else:
 
         pdf.setStrokeColorRGB(0, 0, 0)
         pdf.line(left_margin + wp_col_width, header_y - 10, width - 0.8 * inch, header_y - 10)
-
-        # Přidání červených čarkovaných svislých čar pro víkendy a svátky v PDF
-        pdf.setLineWidth(1.2)
-        pdf.setStrokeColorRGB(1, 0, 0)  # červená
-        pdf.setDash(4, 2)  # čarkovaná čára (dash pattern: 4 body plné, 2 body mezera)
-        current = first_day
-        while current <= last_day:
-            if is_weekend_or_holiday(current):
-                d = current.day
-                x_line = left_margin + wp_col_width + (d - 1) * day_col_width  # začátek sloupce
-                pdf.line(x_line, header_y - 10, x_line, 2.5 * inch)  # svislá čára od hlavičky dolů k dolnímu okraji (uprav podle potřeby)
-            current += timedelta(days=1)
-        pdf.setDash(1, 0)  # vrátit na plnou čáru
 
         sorted_workplaces = sorted(tasks_by_wp.keys())
 
