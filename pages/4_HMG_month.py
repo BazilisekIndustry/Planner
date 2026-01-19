@@ -64,60 +64,61 @@ for t in all_tasks:
 collisions = detect_collisions_in_month(tasks_in_month)
 
 # Příprava dat pro graf
-# Příprava dat pro graf – opravená verze
 plot_data = []
 for t in tasks_in_month:
     pid = t['project_id']
     start_date = datetime.strptime(t['start_date'], '%Y-%m-%d').date()
     end_date = datetime.strptime(t['end_date'], '%Y-%m-%d').date()
     proj = projects.get(pid, {'name': f'P{pid}', 'color': '#4285F4'})
-    task_text = proj['name']
-    color = proj['color']  # ← VŽDY původní barva projektu
-    text_color = '#000000'  # default černý text
+    task_text = proj['name']  # základní název
+    original_color = proj['color']
+    display_color = original_color
+    text_color = '#000000'
 
-    # Detekce kolizí (překryv s jakýmkoliv jiným úkolem na stejném pracovišti)
+    # Pokud je kolize, přidáme vykřičník k názvu
     colliding = collisions.get(t['id'], [])
     if colliding:
-        color = "#EA4335"  # červená jen při kolizi
-        text_color = '#FFFFFF'  # bílý text pro lepší čitelnost
+        task_text += " !"
+        display_color = "#EA4335"  # červená pro kolizi
+        text_color = '#FFFFFF'
 
-    # Tooltip s původní barvou + kolizemi
+    # Tooltip s opravenými daty – správný název projektu, termíny
     coll_str = []
     if colliding:
-        for coll_id in colliding[:5]:
+        for i, coll_id in enumerate(colliding):
+            if i >= 5:
+                coll_str.append("...a další")
+                break
             coll_task = get_task(coll_id)
             if coll_task:
                 coll_pid = coll_task['project_id']
-                coll_proj = projects.get(coll_pid, {'name': f'P{coll_pid}'})
-                coll_str.append(f"{coll_proj['name']} ({coll_pid})")
-        if len(colliding) > 5:
-            coll_str.append("...a další")
+                coll_name = projects.get(coll_pid, {'name': f'P{coll_pid}'})['name']
+                coll_str.append(coll_name)
 
     tooltip = (
-        f"<b>{task_text}</b><br>"
-        f"Projektová barva: <span style='color:{proj['color']}; font-weight:bold'>■ {proj['color']}</span><br>"
-        f"Od: %{{x|%d.%m.%Y}}<br>Do: %{{x2|%d.%m.%Y}}"
+        f"<b>{proj['name']}</b><br>"  # správný název projektu
+        f"Projektová barva: <span style='color:{original_color}; font-weight:bold'>■ {original_color}</span><br>"
+        f"Od: {start_date.strftime('%d.%m.%Y')}<br>"  # opravený formát termínů
+        f"Do: {end_date.strftime('%d.%m.%Y')}"
     )
     if coll_str:
         tooltip += f"<br><b>Kolize s:</b> {', '.join(coll_str)}"
 
     plot_data.append({
         "Pracoviště": get_workplace_name(t['workplace_id']),
-        "Úkol": task_text,
+        "Úkol": task_text,  # název s ! při kolizi
         "Start": max(start_date, first_day),
         "Finish": min(end_date, last_day) + timedelta(days=1),
-        "Color": color,
+        "Color": display_color,
         "Tooltip": tooltip,
         "TextColor": text_color
     })
 
-# Vytvoření grafu
-if plot_data:
+if not plot_data:
+    st.info(f"Žádné úkoly v {calendar.month_name[selected_month]} {selected_year}.")
+else:
     df = pd.DataFrame(plot_data)
-    
-    # Explicitně definujeme barvy, aby Plotly nepřepisoval
-    color_map = {c: c for c in df["Color"].unique()}  # každá barva sama sebe
-    
+    color_map = {c: c for c in df["Color"].unique()}
     fig = px.timeline(
         df,
         x_start="Start",
@@ -126,20 +127,16 @@ if plot_data:
         color="Color",
         text="Úkol",
         hover_name="Úkol",
-        color_discrete_map=color_map,  # ← klíčové – nutí použít přesné hex barvy
+        color_discrete_map=color_map,
         title=f"HMG HK – {calendar.month_name[selected_month]} {selected_year}",
         height=400 + len(workplaces_set) * 40
     )
-
     fig.update_traces(
-        opacity=0.85,
+        opacity=0.7,
         textposition='inside',
         textfont_color=df["TextColor"].tolist(),
         hovertemplate=df["Tooltip"].tolist(),
-        marker_line_width=1,
-        marker_line_color="black"
     )
-
     fig.update_xaxes(
         tickformat="%d",
         tickmode="linear",
@@ -147,62 +144,41 @@ if plot_data:
         range=[first_day, last_day + timedelta(days=1)]
     )
     fig.update_yaxes(autorange="reversed")
-    fig.update_layout(bargap=0.18, bargroupgap=0.08, showlegend=False)
+    fig.update_layout(bargap=0.2, bargroupgap=0.1, showlegend=False)
 
-    # Víkendy a svátky – červené dashed line + annotation
+    # Víkendy a svátky – červené dashed vline
     holidays = get_holidays(selected_year)
     current = first_day
     while current <= last_day:
         if is_weekend_or_holiday(current):
             label = "S" if current in holidays else "V"
-            
-            # Přidání čáry jako shape
-            fig.add_shape(
-                type="line",
-                x0=current,
-                y0=0,
-                x1=current,
-                y1=1,
-                xref="x",
-                yref="paper",
-                line=dict(color="red", dash="dash", width=1),
-                opacity=0.5
-            )
-            
-            # Přidání annotation samostatně
-            fig.add_annotation(
+            fig.add_vline(
                 x=current,
-                y=1.05,
-                text=label,
-                showarrow=False,
-                yref="paper",
-                font=dict(color="red", size=10)
+                line_dash="dash",
+                line_color="red",
+                opacity=0.5,
+                annotation_text=label,
+                annotation_position="top"
             )
-        
         current += timedelta(days=1)
 
     st.plotly_chart(fig, use_container_width=True)
 
-    # ──────────────────────────────────────────────────────────────
-    # EXPORT DO PDF
-    # ──────────────────────────────────────────────────────────────
+    # Export do PDF
     if st.button("Exportovat HMG měsíční do PDF"):
         file_name = f"HMG_mesicni_{selected_year}_{selected_month:02d}.pdf"
         pdf = pdf_canvas.Canvas(file_name, pagesize=landscape(A4))
         width, height = landscape(A4)
 
-        # Nadpis
         pdf.setFont(pdf_font, 16)
         pdf.drawCentredString(width / 2, height - 0.8 * inch, f"HMG HK – {calendar.month_name[selected_month]} {selected_year}")
 
-        # Rozměry
         left_margin = 1.0 * inch
         wp_col_width = 2.0 * inch
         day_col_width = (width - left_margin - wp_col_width - 0.8 * inch) / num_days
         header_y = height - 1.5 * inch
         row_height = (height - 2.5 * inch) / len(workplaces_set) if workplaces_set else 40
 
-        # Hlavička dnů (červeně pro víkendy/svátky)
         pdf.setFont(pdf_font, 10)
         for d in range(1, num_days + 1):
             current_date = date(selected_year, selected_month, d)
@@ -214,21 +190,18 @@ if plot_data:
         pdf.setStrokeColorRGB(0, 0, 0)
         pdf.line(left_margin + wp_col_width, header_y - 10, width - 0.8 * inch, header_y - 10)
 
-        # Seřazená pracoviště
         sorted_workplaces = sorted(workplaces_set)
 
-        # Mapa barev na RGB
         colors_rgb = {}
         for pid, proj in projects.items():
             hex_color = proj['color']
-            r = int(hex_color[1:3], 16) / 255.0
-            g = int(hex_color[3:5], 16) / 255.0
-            b = int(hex_color[5:7], 16) / 255.0
+            r = int(hex_color[1:3], 16) / 255
+            g = int(hex_color[3:5], 16) / 255
+            b = int(hex_color[5:7], 16) / 255
             colors_rgb[hex_color] = (r, g, b)
-        colors_rgb["#34A853"] = (0.20, 0.66, 0.32)  # done
-        colors_rgb["#EA4335"] = (0.92, 0.26, 0.21)  # collision
+        colors_rgb["#34A853"] = (0.20, 0.66, 0.32)
+        colors_rgb["#EA4335"] = (0.92, 0.26, 0.21)
 
-        # Data pro PDF
         pdf_data = []
         for item in plot_data:
             start_day = (item["Start"] - first_day).days + 1
@@ -241,7 +214,6 @@ if plot_data:
                 "color": item["Color"]
             })
 
-        # Kreslení řádků
         for i, wp_name in enumerate(sorted_workplaces):
             y_top = header_y - 20 - i * row_height
             y_bottom = y_top - row_height
@@ -261,7 +233,6 @@ if plot_data:
                 pdf.setFillColorRGB(*rgb)
                 pdf.rect(x1, y_bottom + 5, x2 - x1, row_height - 10, fill=1, stroke=1)
 
-                # Text úkolu
                 if item["color"] == "#EA4335":
                     pdf.setFillColorRGB(1, 1, 1)
                 else:
