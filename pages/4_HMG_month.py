@@ -112,15 +112,18 @@ for wp in sorted(tasks_by_wp.keys()):
         for t in lane_tasks:
             task_to_lane[t['id']] = lane_idx
 
+        if num_lanes == 1:
+            y_prac = wp
+        else:
+            y_prac = f"{wp} - Lane {lane_idx + 1}"
+        y_categories.append(y_prac)
+
     for t in wp_tasks:
         lane_idx = task_to_lane[t['id']]
         if num_lanes == 1:
             y_prac = wp
         else:
             y_prac = f"{wp} - Lane {lane_idx + 1}"
-
-        if wp == y_prac or f"{wp} - Lane 1" == y_prac:
-            y_categories.append(y_prac)
 
         pid = t['project_id']
         start_date = datetime.strptime(t['start_date'], '%Y-%m-%d').date()
@@ -343,7 +346,7 @@ else:
                     if item["wp_name"] != wp_name or item["lane"] != sub:
                         continue
                     x1 = left_margin + wp_col_width + (item["start_day"] - 1) * day_col_width
-                    x2 = left_margin + wp_col_width + (item["end_day"] - 1) * day_col_width
+                    x2 = left_margin + wp_col_width + item["end_day"] * day_col_width
                     rgb = colors_rgb.get(item["color"], (0.26, 0.52, 0.96))
                     pdf.setFillColorRGB(*rgb)
                     pdf.rect(x1, y_bottom + 5, x2 - x1, row_height - 10, fill=1, stroke=1)
