@@ -179,11 +179,16 @@ else:
         hovertemplate="%{customdata[0]}",   # ← DŮLEŽITÉ – bere plný tooltip
         hoverlabel=dict(bgcolor="white", font_size=12)
     )
+    # Definice funkce pro převod date na ms since epoch
+    def date_to_ms(d):
+        dt = datetime.combine(d, datetime.min.time())
+        epoch = datetime(1970, 1, 1)
+        return (dt - epoch).total_seconds() * 1000
     fig.update_xaxes(
         tickformat="%d",
         tickmode="linear",
         dtick=86400000.0,
-        range=[first_day, last_day + timedelta(days=1)]
+        range=[date_to_ms(first_day), date_to_ms(last_day + timedelta(days=1))]
     )
     fig.update_yaxes(autorange="reversed", categoryorder='array', categoryarray=y_categories)
     fig.update_layout(bargap=0.2, bargroupgap=0.1, showlegend=False)
@@ -192,10 +197,12 @@ else:
     current = first_day
     while current <= last_day:
         if is_weekend_or_holiday(current):
+            x0_ms = date_to_ms(current)
+            x1_ms = date_to_ms(current + timedelta(days=1))
             # Přidání šedého obdélníku pro celý sloupec (zvýraznění)
             fig.add_vrect(
-                x0=current,
-                x1=current + timedelta(days=1),
+                x0=x0_ms,
+                x1=x1_ms,
                 fillcolor="lightgray",
                 opacity=0.3,
                 layer="below",
@@ -205,7 +212,7 @@ else:
            
             # Zachování původní červené dashed vline
             fig.add_vline(
-                x=current,
+                x=x0_ms,
                 line_dash="dash",
                 line_color="red",
                 line_width=1.2,
