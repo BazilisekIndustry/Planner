@@ -153,7 +153,7 @@ else:
         if is_weekend_or_holiday(current):
             label = "S" if current in holidays else "V"
             fig.add_vline(
-                x=current,
+                x=current.isoformat(),          # ← klíčová změna
                 line_dash="dash",
                 line_color="red",
                 opacity=0.5,
