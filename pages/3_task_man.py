@@ -152,6 +152,9 @@ else:
                 if parent_task['status'] not in ['done', 'canceled']:
                     st.error(f"Nelze změnit datum u dětského úkolu {task_id}, protože parent není hotový nebo zrušený.")
                     continue
+                else:
+                    # Nastav flag custom_start při manuální změně u child
+                    update_task(task_id, 'custom_start', True)
             if not new_start_str:
                 try:
                     update_task(task_id, 'start_date', None)
@@ -229,6 +232,7 @@ else:
                             if new_kid_start and validate_ddmmyyyy(new_kid_start):
                                 new_kid_yyyymmdd = ddmmyyyy_to_yyyymmdd(new_kid_start)
                                 update_task(kid['id'], 'start_date', new_kid_yyyymmdd)
+                                update_task(kid['id'], 'custom_start', True)  # Nastav flag pro custom start
                                 log_action(username, 'update_kid_start', kid['id'], f"Nové datum zahájení po hotovém parentu: {new_kid_start}")
                     recalculate_from_task(selected_task_id)
                     st.success("Úkol označen jako hotový.")
@@ -251,6 +255,7 @@ else:
                                 if new_kid_start and validate_ddmmyyyy(new_kid_start):
                                     new_kid_yyyymmdd = ddmmyyyy_to_yyyymmdd(new_kid_start)
                                     update_task(kid['id'], 'start_date', new_kid_yyyymmdd)
+                                    update_task(kid['id'], 'custom_start', True)  # Nastav flag pro custom start
                                     log_action(username, 'update_kid_start', kid['id'], f"Nové datum zahájení po zrušeném parentu: {new_kid_start}")
                         recalculate_from_task(selected_task_id)
                         st.success("Úkol zrušen.")
