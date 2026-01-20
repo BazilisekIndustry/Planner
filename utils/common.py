@@ -16,21 +16,15 @@ import pandas as pd
 from st_aggrid import AgGrid, GridUpdateMode, DataReturnMode
 import plotly.express as px
 import os
-
 # ──────────────────────────────────────────────────────────────
 # KONFIGURACE
 # ──────────────────────────────────────────────────────────────
 SUPABASE_URL = st.secrets["supabase_url"]
 SUPABASE_KEY = st.secrets["supabase_key"]
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-
 COOKIE_NAME = 'planner_auth_cookie'
 COOKIE_KEY = st.secrets.get("cookie_key", "planner_streamlit_secret_key")
 COOKIE_EXPIRY_DAYS = 30
-
-
-
-
 # ──────────────────────────────────────────────────────────────
 # HASHOVÁNÍ HESLA
 # ──────────────────────────────────────────────────────────────
@@ -40,7 +34,6 @@ def hash_single_password(plain_password: str) -> str:
     }
     Hasher.hash_passwords(temp_credentials)
     return temp_credentials["usernames"]["temp_user"]["password"]
-
 # ──────────────────────────────────────────────────────────────
 # NAČÍTÁNÍ UŽIVATELŮ
 # ──────────────────────────────────────────────────────────────
@@ -62,7 +55,6 @@ def load_users_from_db():
     except Exception as e:
         print(f"[ERROR] Načítání uživatelů selhalo: {str(e)}")
         return {"usernames": {}}
-
 #============================
 # ČESKÉ SVÁTKY A POMOCNÉ FUNKCE
 # ============================
@@ -78,7 +70,6 @@ def get_easter(year):
     day = f % 31 + 1
     easter_sunday = date(year, month, day)
     return easter_sunday + timedelta(days=1)
-
 def get_holidays(year):
     return [
         date(year, 1, 1),
@@ -94,7 +85,6 @@ def get_holidays(year):
         date(year, 12, 25),
         date(year, 12, 26),
     ]
-
 def is_holiday(dt):
     holidays = get_holidays(dt.year)
     if dt.month == 1:
@@ -102,31 +92,62 @@ def is_holiday(dt):
     if dt.month == 12:
         holidays += get_holidays(dt.year + 1)
     return dt in holidays
-
 def is_weekend_or_holiday(dt):
     return dt.weekday() >= 5 or is_holiday(dt)
-
 def is_working_day(dt, mode):
     if mode == '7.5' and dt.weekday() >= 5:
         return False
     return not is_holiday(dt)
-
 def normalize_date_str(date_str):
     if not date_str:
         return None
-    return re.sub(r'[./]', '-', date_str.strip())
-
+    # Odstranění mezer, času (pokud je Timestamp str jako '2026-01-25 00:00:00'), a nahrazení . / na -
+    cleaned = date_str.strip().split(' ')[0]  # Ořež čas
+    cleaned = cleaned.replace(' ', '')
+    return re.sub(r'[./]', '-', cleaned)
 def ddmmyyyy_to_yyyymmdd(date_str):
     if not date_str or not date_str.strip():
         return None
     normalized = normalize_date_str(date_str)
-    try:
-        day, month, year = map(int, normalized.split('-'))
+    # Podpora pro Y-m-d
+    ymd_pattern = re.compile(r'^(\d{4})-(\d{1,2})-(\d{1,2})$')
+    ymd_match = ymd_pattern.match(normalized)
+    if ymd_match:
+        year, month, day = map(int, ymd_match.groups())
         dt = date(year, month, day)
         return dt.strftime('%Y-%m-%d')
+    # Původní d-m-Y
+    try:
+        parts = normalized.split('-')
+        if len(parts) == 3:
+            day, month, year = map(int, parts)
+            dt = date(year, month, day)
+            return dt.strftime('%Y-%m-%d')
     except (ValueError, TypeError):
-        raise ValueError("Neplatný formát data. Použijte např. 1.1.2026, 01.01.2026, 1-1-2026 apod.")
-
+        pass
+    # Alternativní bez oddělovačů
+    try:
+        if len(normalized) == 8 and normalized.isdigit():
+            day = int(normalized[:2])
+            month = int(normalized[2:4])
+            year = int(normalized[4:])
+            dt = date(year, month, day)
+            return dt.strftime('%Y-%m-%d')
+        elif len(normalized) == 7 and normalized.isdigit():
+            day = int(normalized[0])
+            month = int(normalized[1:3])
+            year = int(normalized[3:])
+            dt = date(year, month, day)
+            return dt.strftime('%Y-%m-%d')
+        elif len(normalized) == 6 and normalized.isdigit():
+            day = int(normalized[0])
+            month = int(normalized[1:2])
+            year = int(normalized[2:])
+            dt = date(year, month, day)
+            return dt.strftime('%Y-%m-%d')
+    except (ValueError, TypeError):
+        pass
+    raise ValueError("Neplatný formát data. Použijte např. 1.1.2026, 01.01.2026, 1-1-2026 apod.")
 def yyyymmdd_to_ddmmyyyy(date_str):
     if not date_str:
         return ""
@@ -134,23 +155,62 @@ def yyyymmdd_to_ddmmyyyy(date_str):
         return datetime.strptime(date_str, '%Y-%m-%d').strftime('%d.%m.%Y')
     except Exception:
         return ""
-
 def validate_ddmmyyyy(date_str):
     if not date_str:
         return True
     normalized = normalize_date_str(date_str)
-    pattern = re.compile(r'^(\d{1,2})-(\d{1,2})-(\d{4})$')
-    match = pattern.match(normalized)
-    if not match:
-        return False
-    try:
-        day, month, year = map(int, match.groups())
+    # Podpora pro Y-m-d (např. '2026-01-25' nebo '2026-1-25')
+    ymd_pattern = re.compile(r'^(\d{4})-(\d{1,2})-(\d{1,2})$')
+    ymd_match = ymd_pattern.match(normalized)
+    if ymd_match:
+        year, month, day = map(int, ymd_match.groups())
         if not (1 <= day <= 31 and 1 <= month <= 12 and 2000 <= year <= 2100):
             return False
-        return True
-    except Exception:
+        try:
+            date(year, month, day)
+            return True
+        except ValueError:
+            return False
+    # Původní d-m-Y (např. '25-1-2026')
+    dmy_pattern = re.compile(r'^(\d{1,2})-(\d{1,2})-(\d{4})$')
+    dmy_match = dmy_pattern.match(normalized)
+    if dmy_match:
+        day, month, year = map(int, dmy_match.groups())
+        if not (1 <= day <= 31 and 1 <= month <= 12 and 2000 <= year <= 2100):
+            return False
+        try:
+            date(year, month, day)
+            return True
+        except ValueError:
+            return False
+    # Alternativní bez oddělovačů (DDMMYYYY nebo DMMYYYY)
+    try:
+        if len(normalized) == 8 and normalized.isdigit():
+            day = int(normalized[:2])
+            month = int(normalized[2:4])
+            year = int(normalized[4:])
+            if 1 <= day <= 31 and 1 <= month <= 12 and 2000 <= year <= 2100:
+                date(year, month, day)
+                return True
+        elif len(normalized) == 7 and normalized.isdigit():
+            # Pro případy jako '2512026' -> day=2, month=5, year=12026 (neplatné), ale pro '112026' -> day=1, month=1, year=2026
+            day = int(normalized[0])
+            month = int(normalized[1:3])
+            year = int(normalized[3:])
+            if 1 <= day <= 31 and 1 <= month <= 12 and 2000 <= year <= 2100:
+                date(year, month, day)
+                return True
+        elif len(normalized) == 6 and normalized.isdigit():
+            # Extrémní: '112026' bez leading 0 pro den
+            day = int(normalized[0])
+            month = int(normalized[1:2])
+            year = int(normalized[2:])
+            if 1 <= day <= 31 and 1 <= month <= 12 and 2000 <= year <= 2100:
+                date(year, month, day)
+                return True
+    except ValueError:
         return False
-
+    return False
 def calculate_end_date(start_yyyymmdd, hours, mode):
     if not start_yyyymmdd:
         return None
@@ -163,7 +223,6 @@ def calculate_end_date(start_yyyymmdd, hours, mode):
             days_count += 1
         current += timedelta(days=1)
     return (current - timedelta(days=1)).strftime('%Y-%m-%d')
-
 def get_next_working_day_after(date_str, capacity_mode):
     if not date_str:
         return None
@@ -177,11 +236,9 @@ def get_next_working_day_after(date_str, capacity_mode):
 # ... (zde zůstávají všechny původní funkce beze změny - init_db až po delete_project)
 def init_db():
     pass
-
 def get_projects():
     response = supabase.table('projects').select('id, name, color').execute()
     return [(row['id'], row['name'], row.get('color', '#4285F4')) for row in response.data]
-
 def get_safe_project_colors():
     return [
         ('Modrá klasická',    '#4285F4'),
@@ -205,43 +262,41 @@ def get_safe_project_colors():
         ('Tmavě zelenkavá',   '#004D40'),
         ('Teplá šedá',        '#757575'),
     ]
-
 def detect_collisions_in_month(tasks_in_month):
     """
     Detekuje JAKÝKOLIV překryv úkolů na stejném pracovišti.
     Vrátí pro každý task_id seznam ID úkolů, se kterými koliduje.
     """
     from collections import defaultdict
-    
+   
     wp_groups = defaultdict(list)
     for t in tasks_in_month:
         wp_groups[t['workplace_id']].append(t)
-    
+   
     collisions = defaultdict(list)  # task_id → list kolizních task_id
-    
+   
     for wp_id, group in wp_groups.items():
         group.sort(key=lambda x: datetime.strptime(x['start_date'], '%Y-%m-%d'))
-        
+       
         for i in range(len(group)):
             t1 = group[i]
             t1_start = datetime.strptime(t1['start_date'], '%Y-%m-%d').date()
             t1_end = datetime.strptime(t1['end_date'], '%Y-%m-%d').date()
-            
+           
             for j in range(i + 1, len(group)):
                 t2 = group[j]
                 t2_start = datetime.strptime(t2['start_date'], '%Y-%m-%d').date()
-                
+               
                 if t2_start > t1_end:
                     break
-                
+               
                 t2_end = datetime.strptime(t2['end_date'], '%Y-%m-%d').date()
-                
+               
                 if not (t1_end < t2_start or t1_start > t2_end):
                     collisions[t1['id']].append(t2['id'])
                     collisions[t2['id']].append(t1['id'])
-    
+   
     return collisions
-
 def get_project_choices():
     projects = get_projects()
     return [str(p[0]) for p in projects] if projects else []
@@ -259,11 +314,9 @@ def log_action(user, action, task_id, details):
 def get_workplaces():
     response = supabase.table('workplaces').select('id, name').execute()
     return [(row['id'], row['name']) for row in response.data]
-
 def get_workplace_name(wp_id):
     response = supabase.table('workplaces').select('name').eq('id', wp_id).execute()
     return response.data[0]['name'] if response.data else f"ID {wp_id}"
-
 def add_workplace(name):
     if not name.strip():
         return False
@@ -272,14 +325,12 @@ def add_workplace(name):
         return True
     except Exception:
         return False
-
 def delete_workplace(wp_id):
     response = supabase.table('tasks').select('id').eq('workplace_id', wp_id).execute()
     if response.data:
         return False
     supabase.table('workplaces').delete().eq('id', wp_id).execute()
     return True
-
 def add_project(project_id, name, color):
     try:
         supabase.table('projects').insert({
@@ -290,11 +341,9 @@ def add_project(project_id, name, color):
         return True
     except Exception:
         return False
-
 def get_tasks(project_id):
     response = supabase.table('tasks').select('*').eq('project_id', project_id).execute()
     return response.data
-
 def add_task(project_id, workplace_id, hours, mode, start_ddmmyyyy=None, notes='', bodies_count=1, is_active=True, parent_id=None):
     start_yyyymmdd = ddmmyyyy_to_yyyymmdd(start_ddmmyyyy) if start_ddmmyyyy else None
     data = {
@@ -314,7 +363,6 @@ def add_task(project_id, workplace_id, hours, mode, start_ddmmyyyy=None, notes='
     if start_yyyymmdd:
         recalculate_from_task(task_id)
     return task_id
-
 def update_task(task_id, field, value, is_internal=False):
     if field in ('start_date', 'end_date') and value and not is_internal:
         value = ddmmyyyy_to_yyyymmdd(value)
@@ -326,19 +374,15 @@ def update_task(task_id, field, value, is_internal=False):
         'description': f'Updated {field} to {value}',
         'changed_by': st.session_state.get('username', 'system')
     }).execute()
-
 def get_task(task_id):
     response = supabase.table('tasks').select('*').eq('id', task_id).execute()
     return response.data[0] if response.data else None
-
 def get_parent(task_id):
     response = supabase.table('task_dependencies').select('parent_id').eq('task_id', task_id).execute()
     return response.data[0]['parent_id'] if response.data else None
-
 def get_children(parent_id):
     response = supabase.table('task_dependencies').select('task_id').eq('parent_id', parent_id).execute()
     return [row['task_id'] for row in response.data]
-
 def has_cycle(task_id):
     visited = set()
     current = task_id
@@ -348,7 +392,6 @@ def has_cycle(task_id):
         visited.add(current)
         current = get_parent(current)
     return False
-
 def recalculate_from_task(task_id):
     task = get_task(task_id)
     if not task:
@@ -375,7 +418,6 @@ def recalculate_from_task(task_id):
             continue
         update_task(child_id, 'start_date', child_start, is_internal=True)
         recalculate_from_task(child_id)
-
 def recalculate_project(project_id):
     tasks = get_tasks(project_id)
     root_ids = [t['id'] for t in tasks if not get_parent(t['id'])]
@@ -385,7 +427,6 @@ def recalculate_project(project_id):
         return
     for root_id in root_ids:
         recalculate_from_task(root_id)
-
 def get_colliding_projects_simulated(workplace_id, start_date, end_date):
     if not start_date or not end_date:
         return []
@@ -412,7 +453,6 @@ def get_colliding_projects_simulated(workplace_id, start_date, end_date):
         except Exception:
             continue
     return list(set(colliding))
-
 def get_colliding_projects(task_id):
     task = get_task(task_id)
     if not task or not task.get('start_date') or not task.get('end_date'):
@@ -439,15 +479,12 @@ def get_colliding_projects(task_id):
         except Exception:
             continue
     return list(set(colliding))
-
 def check_collisions(task_id):
     return len(get_colliding_projects(task_id)) > 0
-
 def mark_all_collisions():
     response = supabase.table('tasks').select('id').not_.is_('start_date', 'null').not_.is_('end_date', 'null').execute()
     ids = [row['id'] for row in response.data]
     return {tid: check_collisions(tid) for tid in ids}
-
 def delete_task(task_id):
     try:
         supabase.table('change_log').delete().eq('task_id', task_id).execute()
@@ -458,7 +495,6 @@ def delete_task(task_id):
     except Exception as e:
         st.error(f"Chyba při mazání úkolu: {str(e)}")
         return False
-
 def delete_project(project_id):
     try:
         tasks_response = supabase.table('tasks').select('id').eq('project_id', project_id).execute()
@@ -472,11 +508,9 @@ def delete_project(project_id):
     except Exception as e:
         st.error(f"Chyba při mazání projektu {project_id}: {str(e)}")
         return False
-
 # ============================
 # USER MANAGEMENT FUNKCE – vše přes Supabase
 # ============================
-
 def delete_user(username: str):
     """
     Smaže uživatele z tabulky app_users podle username.
@@ -484,34 +518,28 @@ def delete_user(username: str):
     """
     if not username.strip():
         return False, "Uživatelské jméno je prázdné."
-
     try:
         # 1. Najdi, jestli uživatel existuje (pro lepší zprávu)
         check = supabase.table('app_users')\
                  .select("username")\
                  .eq("username", username)\
                  .execute()
-
         if not check.data:
             return False, f"Uživatel '{username}' neexistuje."
-
         # 2. Smaž uživatele
         response = supabase.table('app_users')\
                    .delete()\
                    .eq("username", username)\
                    .execute()
-
         if response.data:
             # Vyčisti cache (pokud máš cachovanou funkci)
             # load_users_from_db.clear()  # ← odkomentuj jen pokud máš @st.cache_data
-
             return True, f"Uživatel '{username}' byl úspěšně smazán."
         else:
             return False, "Smazání selhalo (žádný řádek nebyl ovlivněn)."
-
     except Exception as e:
         return False, f"Chyba při mazání uživatele: {str(e)}"
-    
+   
 def add_user(username, name, password, role, email=""):
     try:
         count_response = supabase.table('app_users').select("count", count="exact").execute()
@@ -520,14 +548,11 @@ def add_user(username, name, password, role, email=""):
             return False, "Maximální počet uživatelů (5 + admin) dosažen."
     except Exception as e:
         return False, f"Chyba při kontrole počtu uživatelů: {e}"
-
     check = supabase.table('app_users').select("username").eq("username", username).execute()
     if check.data:
         return False, "Uživatel s tímto uživatelským jménem již existuje."
-
     # Správné hashování pro verzi 0.4.2
     hashed_pw = hash_single_password(password)
-
     data = {
         "username": username,
         "name": name,
@@ -536,7 +561,6 @@ def add_user(username, name, password, role, email=""):
     }
     if email.strip():
         data["email"] = email.strip()
-
     try:
         response = supabase.table('app_users').insert(data).execute()
         if response.data:
@@ -545,12 +569,10 @@ def add_user(username, name, password, role, email=""):
             return False, "Nepodařilo se vložit uživatele."
     except Exception as e:
         return False, f"Chyba při vkládání: {str(e)}"
-
-
 def reset_password(username, new_password='1234'):
     # Správné hashování pro verzi 0.4.2
     hashed_pw = hash_single_password(new_password)
-    
+   
     try:
         response = supabase.table('app_users')\
                    .update({"password_hash": hashed_pw})\
@@ -562,12 +584,10 @@ def reset_password(username, new_password='1234'):
             return False, "Uživatel nenalezen."
     except Exception as e:
         return False, f"Chyba při resetu hesla: {str(e)}"
-
-
 def change_password(username, new_password):
     # Správné hashování pro verzi 0.4.2
     hashed_pw = hash_single_password(new_password)
-    
+   
     try:
         response = supabase.table('app_users')\
                    .update({"password_hash": hashed_pw})\
@@ -579,10 +599,9 @@ def change_password(username, new_password):
             return False, "Uživatel nenalezen."
     except Exception as e:
         return False, f"Chyba při změně hesla: {str(e)}"
-    
+   
 # utils/common.py
 # ... ostatní importy a funkce ...
-
 # utils/common.py (jen tato funkce – zbytek souboru nech tak, jak je)
 def render_sidebar(current_page):
     """
@@ -592,7 +611,7 @@ def render_sidebar(current_page):
     # Načtení role z DB, pokud chybí nebo je viewer
     role = st.session_state.get('role')
     username = st.session_state.get('username')
-    
+   
     if username and (role is None or role == 'viewer'):
         try:
             response = supabase.table('app_users')\
@@ -607,16 +626,13 @@ def render_sidebar(current_page):
         except Exception as e:
             print(f"Chyba při načítání role: {e}")
             role = 'viewer'
-
     # Uvítání
     user_name = st.session_state.get('name', 'Uživatel')
     st.sidebar.success(f"Vítej, **{user_name}** ({role})")
-
     # Logout tlačítko (použijeme funkci z auth_simple.py)
     from utils.auth_simple import logout  # ← import zde (nebo nahoře v souboru)
     if st.sidebar.button("Odhlásit se"):
         logout()
-
     # Seznam položek navigace
     options = [
         "Přehledový dashboard",
@@ -629,7 +645,6 @@ def render_sidebar(current_page):
     ]
     if role == 'admin':
         options.append("User Management")
-
     # Mapování textu → název souboru (uprav si podle skutečných názvů tvých .py souborů!)
     page_map = {
         "Přehledový dashboard": "pages/1_prehled.py",
@@ -641,14 +656,12 @@ def render_sidebar(current_page):
         "Změnit heslo": "pages/7_pass_man.py",
         "User Management": "pages/8_user_man.py"
     }
-
     # Najdi index aktuální stránky
     try:
         current_index = options.index(current_page)
     except ValueError:
         current_index = 0
         st.sidebar.warning(f"Stránka '{current_page}' není v navigaci.")
-
     # Klikatelné radio menu
     selected = st.sidebar.radio(
         "Navigace",
@@ -657,7 +670,6 @@ def render_sidebar(current_page):
         key="nav_radio"
         # Žádný disabled – uživatel může kliknout a přepnout
     )
-
     # Přesměrování při změně
     if selected != current_page:
         target_page = page_map.get(selected)
@@ -665,7 +677,6 @@ def render_sidebar(current_page):
             st.switch_page(target_page)
         else:
             st.sidebar.warning(f"Stránka '{selected}' není namapovaná.")
-
     # Footer
     st.sidebar.markdown("---")
     st.sidebar.markdown("Plánovač Horkých komor v1.1")
