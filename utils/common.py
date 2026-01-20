@@ -401,11 +401,7 @@ def recalculate_from_task(task_id):
         child_start = None
     else:
         if task['start_date']:
-            end_date = calculate_end_date(
-                task['start_date'],
-                task['hours'],
-                task['capacity_mode']
-            )
+            end_date = calculate_end_date(task['start_date'], task['hours'], task['capacity_mode'])
             update_task(task_id, 'end_date', end_date, is_internal=True)
             child_start = get_next_working_day_after(end_date, task['capacity_mode'])
         else:
@@ -416,8 +412,13 @@ def recalculate_from_task(task_id):
         child = get_task(child_id)
         if not child or child['status'] == 'canceled':
             continue
-        update_task(child_id, 'start_date', child_start, is_internal=True)
-        recalculate_from_task(child_id)
+        parent_status = task['status']  # Status parenta
+        if parent_status in ['done', 'canceled'] and child.get('custom_start', False):
+            # Nepřepisovat start, jen rekalkulovat od child dál
+            recalculate_from_task(child_id)
+        else:
+            update_task(child_id, 'start_date', child_start, is_internal=True)
+            recalculate_from_task(child_id)
 def recalculate_project(project_id):
     tasks = get_tasks(project_id)
     root_ids = [t['id'] for t in tasks if not get_parent(t['id'])]
