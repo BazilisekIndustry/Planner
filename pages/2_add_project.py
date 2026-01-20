@@ -8,37 +8,28 @@ st.set_page_config(page_title="Plánovač HK", layout="wide")
 if not check_login():
     st.switch_page("Home.py")
     st.stop()
-
 # Základní uživatelské info
 username = st.session_state.get("username", "neznámý")
 name = st.session_state.get("name", "Uživatel")
 role = st.session_state.get("role", "viewer")
-
 render_sidebar("Přidat projekt / úkol")
-
 st.header("Přidat projekt a úkol")
-
 if role == "viewer":
     st.error("Tato stránka je dostupná jen pro administrátory a běžné uživatele.")
     st.stop()
-
 # ──────────────────────────────────────────────────────────────
 # ROZDĚLENÍ NA DVA SLOUPCE
 # ──────────────────────────────────────────────────────────────
 col1, col2 = st.columns([1, 1.4])
-
 # ──────────────────────────────
 # LEVÝ SLOUPEC – PŘIDAT PROJEKT
 # ──────────────────────────────
 with col1:
     st.subheader("Přidat projekt")
-
     proj_id = st.text_input("Číslo projektu (povinné)", key="new_proj_id")
     proj_name = st.text_input("Název projektu (volitelné)", key="new_proj_name")
-
     colors_list = get_safe_project_colors()  # [ (label, hex), ... ]
     color_labels = [label for label, _ in colors_list]
-
     # Čistý selectbox bez HTML v položkách
     selected_label = st.selectbox(
         "Barva projektu",
@@ -46,22 +37,20 @@ with col1:
         index=0,
         key="new_project_color_select"
     )
-
     # Najdeme vybranou barvu
     selected_color = next(
         (color for label, color in colors_list if label == selected_label),
         "#4285F4"  # fallback
     )
-
     # Barevný čtvereček + název barvy vedle sebe (Varianta A)
     st.markdown(
         f'''
         <div style="display: flex; align-items: center; gap: 12px; margin-top: -4px; margin-bottom: 8px;">
             <div style="
-                width: 28px; 
-                height: 28px; 
-                background-color: {selected_color}; 
-                border-radius: 6px; 
+                width: 28px;
+                height: 28px;
+                background-color: {selected_color};
+                border-radius: 6px;
                 border: 1px solid #d0d0d0;
                 flex-shrink: 0;
             "></div>
@@ -70,7 +59,6 @@ with col1:
         ''',
         unsafe_allow_html=True
     )
-
     if st.button("Přidat projekt", type="primary", use_container_width=True):
         proj_id_clean = proj_id.strip()
         if not proj_id_clean:
@@ -99,24 +87,29 @@ with col1:
                         st.error("Nepodařilo se uložit projekt do databáze.")
                 except Exception as e:
                     st.error(f"Chyba při přidávání projektu:\n{str(e)}")
-
 # Úspěšná hláška + balónky
 if st.session_state.get("project_added_success", False):
     pid = st.session_state["project_added_id"]
     st.success(f"Projekt **{pid}** byl úspěšně přidán! 🎉")
     st.balloons()
+    # Automaticky vybrat nový projekt v sekci úkolů
+    projects = get_projects()
+    display_options = [
+        (f"{p_id} – {name or 'bez názvu'}", p_id)
+        for p_id, name, *_ in projects
+    ]
+    new_display = next((opt for opt in display_options if opt[1] == pid), None)
+    if new_display:
+        st.session_state["add_task_project"] = new_display
     del st.session_state["project_added_success"]
     st.session_state.pop("project_added_id", None)
-
 # ──────────────────────────────
 # PRAVÝ SLOUPEC – PŘIDAT ÚKOL
 # ──────────────────────────────
 with col2:
     st.subheader("Přidat úkol")
-
     with st.form(key="add_task_form", clear_on_submit=False):
         colA, colB = st.columns(2)
-
         with colA:
             projects = get_projects()
             if not projects:
@@ -134,7 +127,6 @@ with col2:
                     index=0,
                     key="add_task_project"
                 )
-
             parent_id = None
             if project_id:
                 possible_parents = get_tasks(project_id)
@@ -144,21 +136,22 @@ with col2:
                     f"{(t['notes'] or '')[:28]}{'...' if len(t['notes'] or '') > 28 else ''}"
                     for t in possible_parents
                 ]
-                parent_choice = st.selectbox("Nadřazený úkol (větev)", parent_options)
+                parent_choice = st.selectbox(
+                    "Nadřazený úkol (větev)",
+                    parent_options,
+                    key="add_task_parent"
+                )
                 if parent_choice != "Žádný (root)":
                     idx = parent_options.index(parent_choice) - 1
                     if 0 <= idx < len(possible_parents):
                         parent_id = possible_parents[idx]["id"]
             else:
                 st.info("Vyberte projekt pro zobrazení možných nadřazených úkolů.")
-
             wp_names = [name for _, name in get_workplaces()]
             wp_name = st.selectbox("Pracoviště", wp_names, key="add_task_wp")
             wp_id = next((wid for wid, name in get_workplaces() if name == wp_name), None)
-
-            hours = st.number_input("Počet hodin", min_value=1, step=1, format="%d")
-            bodies_count = st.number_input("Počet těles", min_value=1, step=1)
-
+            hours = st.number_input("Počet hodin", min_value=1, step=1, format="%d", key="add_task_hours")
+            bodies_count = st.number_input("Počet těles", min_value=1, step=1, key="add_task_bodies")
             is_active = st.radio(
                 "Stav těles",
                 ["Aktivní", "Neaktivní"],
@@ -166,12 +159,10 @@ with col2:
                 horizontal=True,
                 key="add_task_active"
             ) == "Aktivní"
-
         with colB:
             capacity_mode = st.radio(
                 "Režim kapacity", ["7.5", "24"], horizontal=True, key="add_task_mode"
             )
-
             start_date_obj = st.date_input(
                 "Začátek (volitelné)",
                 value=None,
@@ -179,11 +170,8 @@ with col2:
                 key="add_task_start"
             )
             start_ddmmyyyy = start_date_obj.strftime("%d.%m.%Y") if start_date_obj else None
-
-            notes = st.text_area("Poznámka", height=108)
-
+            notes = st.text_area("Poznámka", height=108, key="add_task_notes")
         submitted = st.form_submit_button("Přidat úkol", use_container_width=True, type="primary")
-
         if submitted:
             if not project_id:
                 st.error("Vyberte projekt")
@@ -200,7 +188,6 @@ with col2:
                         calculate_end_date(start_yyyymmdd, float(hours), capacity_mode)
                         if start_yyyymmdd else None
                     )
-
                     conflict_in_project = False
                     if start_yyyymmdd and temp_end:
                         existing = (
@@ -215,14 +202,12 @@ with col2:
                         )
                         new_start = datetime.strptime(start_yyyymmdd, "%Y-%m-%d").date()
                         new_end = datetime.strptime(temp_end, "%Y-%m-%d").date()
-
                         for ex in existing:
                             ex_start = datetime.strptime(ex["start_date"], "%Y-%m-%d").date()
                             ex_end = datetime.strptime(ex["end_date"], "%Y-%m-%d").date()
                             if not (new_end < ex_start or new_start > ex_end):
                                 conflict_in_project = True
                                 break
-
                     if conflict_in_project:
                         st.error(
                             "Kolize uvnitř stejného projektu na tomto pracovišti!\n"
@@ -233,7 +218,6 @@ with col2:
                             get_colliding_projects_simulated(wp_id, start_yyyymmdd, temp_end)
                             if start_yyyymmdd and temp_end else []
                         )
-
                         if colliding_projects:
                             st.session_state["pending_task_data"] = {
                                 "project_id": project_id,
@@ -274,25 +258,28 @@ with col2:
                                     children_count = len(get_children(parent_id))
                                     if children_count > 1:
                                         st.session_state["fork_warning"] = children_count
+                                # Vyčištění formuláře kromě projektu
+                                for key in [
+                                    "add_task_wp", "add_task_hours", "add_task_bodies",
+                                    "add_task_active", "add_task_mode", "add_task_start",
+                                    "add_task_notes", "add_task_parent"
+                                ]:
+                                    st.session_state.pop(key, None)
                                 st.rerun()
-
                 except Exception as e:
                     st.error(f"Chyba při přidávání úkolu:\n{str(e)}")
-
 # ──────────────────────────────────────────────────────────────
 # POTVRZENÍ PŘI KOLIZI MEZI PROJEKTY
 # ──────────────────────────────────────────────────────────────
 if st.session_state.get("show_collision_confirm", False):
     pending = st.session_state["pending_task_data"]
     colliding_str = ", ".join(map(str, st.session_state.get("colliding_projects", [])))
-
     st.warning(
         f"**VAROVÁNÍ – KOLIZE MEZI PROJEKTY!**\n\n"
         f"Nový úkol bude kolidovat s projekty: **{colliding_str}**\n"
         f"na pracovišti **{get_workplace_name(pending['workplace_id'])}**.\n\n"
         "Opravdu chcete úkol přidat i přes tuto kolizi?"
     )
-
     c1, c2 = st.columns(2)
     with c1:
         if st.button("Ano, přidat přesto", type="primary"):
@@ -311,17 +298,22 @@ if st.session_state.get("show_collision_confirm", False):
                     cc = len(get_children(pending["parent_id"]))
                     if cc > 1:
                         st.session_state["fork_warning"] = cc
+                # Vyčištění formuláře kromě projektu
+                for key in [
+                    "add_task_wp", "add_task_hours", "add_task_bodies",
+                    "add_task_active", "add_task_mode", "add_task_start",
+                    "add_task_notes", "add_task_parent"
+                ]:
+                    st.session_state.pop(key, None)
             for k in ["pending_task_data", "colliding_projects", "show_collision_confirm"]:
                 st.session_state.pop(k, None)
             st.rerun()
-
     with c2:
         if st.button("Ne, zrušit"):
             st.info("Přidání úkolu zrušeno.")
             for k in ["pending_task_data", "colliding_projects", "show_collision_confirm"]:
                 st.session_state.pop(k, None)
             st.rerun()
-
 # ──────────────────────────────────────────────────────────────
 # ÚSPĚŠNÉ HLÁŠKY
 # ──────────────────────────────────────────────────────────────
@@ -331,13 +323,12 @@ if st.session_state.get("task_added_success", False):
         f"**Úkol úspěšně přidán!** ✅\n\n"
         f"Projekt: **{d['project']}**\n"
         f"Pracoviště: **{d['workplace']}**\n"
-        f"Hodiny: **{d['hours']}**   |   Režim: **{d['mode']}**\n"
+        f"Hodiny: **{d['hours']}**   |   Režim: **{d['mode']}**\n"
         f"Začátek: **{d['start']}**"
     )
     st.toast("Nový úkol je připraven!", icon="🎉")
     del st.session_state["task_added_success"]
     st.session_state.pop("task_added_details", None)
-
 if "fork_warning" in st.session_state:
     st.warning(
         f"Vytvořili jste **fork/split** – nadřazený úkol má nyní "
