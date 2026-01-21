@@ -26,8 +26,8 @@ col1, col2 = st.columns([1, 1.4])
 # ──────────────────────────────
 with col1:
     st.subheader("Přidat projekt")
-    proj_id = st.text_input("Číslo projektu (povinné)", key="new_proj_id")
-    proj_name = st.text_input("Název projektu (volitelné)", key="new_proj_name")
+    proj_id = st.text_input("Číslo projektu (povinné)", key="new_proj_id", clear_on_submit=True)
+    proj_name = st.text_input("Název projektu (volitelné)", key="new_proj_name", clear_on_submit=True)
     colors_list = get_safe_project_colors()  # [ (label, hex), ... ]
     color_labels = [label for label, _ in colors_list]
     # Čistý selectbox bez HTML v položkách
