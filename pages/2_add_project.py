@@ -82,6 +82,8 @@ with col1:
                         # Vyčištění formuláře
                         for key in ["new_proj_id", "new_proj_name", "new_project_color_select"]:
                             st.session_state.pop(key, None)
+                        # Clear cache pokud existuje
+                        st.cache_data.clear()
                         st.rerun()
                     else:
                         st.error("Nepodařilo se uložit projekt do databáze.")
@@ -127,6 +129,12 @@ with col2:
                     index=0,
                     key="add_task_project"
                 )
+            # Reset parent selectbox při změně projektu
+            previous_project = st.session_state.get("previous_project", None)
+            if previous_project != project_id:
+                if "add_task_parent" in st.session_state:
+                    del st.session_state["add_task_parent"]
+                st.session_state["previous_project"] = project_id
             parent_id = None
             if project_id:
                 possible_parents = get_tasks(project_id)
@@ -265,6 +273,8 @@ with col2:
                                     "add_task_notes", "add_task_parent"
                                 ]:
                                     st.session_state.pop(key, None)
+                                # Clear cache pokud existuje
+                                st.cache_data.clear()
                                 st.rerun()
                 except Exception as e:
                     st.error(f"Chyba při přidávání úkolu:\n{str(e)}")
@@ -305,6 +315,8 @@ if st.session_state.get("show_collision_confirm", False):
                     "add_task_notes", "add_task_parent"
                 ]:
                     st.session_state.pop(key, None)
+                # Clear cache pokud existuje
+                st.cache_data.clear()
             for k in ["pending_task_data", "colliding_projects", "show_collision_confirm"]:
                 st.session_state.pop(k, None)
             st.rerun()
