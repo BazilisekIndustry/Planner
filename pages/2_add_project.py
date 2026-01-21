@@ -26,8 +26,8 @@ col1, col2 = st.columns([1, 1.4])
 # ──────────────────────────────
 with col1:
     st.subheader("Přidat projekt")
-    proj_id = st.text_input("Číslo projektu (povinné)", key="new_proj_id", clear_on_submit=True)
-    proj_name = st.text_input("Název projektu (volitelné)", key="new_proj_name", clear_on_submit=True)
+    proj_id = st.text_input("Číslo projektu (povinné)", key="new_proj_id")
+    proj_name = st.text_input("Název projektu (volitelné)", key="new_proj_name")
     colors_list = get_safe_project_colors()  # [ (label, hex), ... ]
     color_labels = [label for label, _ in colors_list]
     # Čistý selectbox bez HTML v položkách
@@ -110,7 +110,7 @@ if st.session_state.get("project_added_success", False):
 # ──────────────────────────────
 with col2:
     st.subheader("Přidat úkol")
-    with st.form(key="add_task_form", clear_on_submit=False):
+    with st.form(key="add_task_form"):
         colA, colB = st.columns(2)
         with colA:
             projects = get_projects()
