@@ -108,7 +108,7 @@ if st.session_state.get("project_added_success", False):
 # ──────────────────────────────
 with col2:
     st.subheader("Přidat úkol")
-    with st.form(key="add_task_form", clear_on_submit=False):
+    with st.form(key="add_task_form", clear_on_submit=True):
         colA, colB = st.columns(2)
         with colA:
             projects = get_projects()
@@ -232,6 +232,7 @@ with col2:
                             }
                             st.session_state["colliding_projects"] = colliding_projects
                             st.session_state["show_collision_confirm"] = True
+                            st.session_state["selected_project"] = st.session_state.get("add_task_project")
                             st.rerun()
                         else:
                             task_id = add_task(
@@ -258,21 +259,15 @@ with col2:
                                     children_count = len(get_children(parent_id))
                                     if children_count > 1:
                                         st.session_state["fork_warning"] = children_count
-                                # Vyčištění formuláře kromě projektu
-                                for key in [
-                                    "add_task_wp", "add_task_hours", "add_task_bodies",
-                                    "add_task_active", "add_task_mode", "add_task_start",
-                                    "add_task_notes"
-                                ]:
-                                    st.session_state.pop(key, None)
-                                # Vyčištění parent key - protože je dynamický, ale pro jistotu
-                                parent_key = f"add_task_parent_{project_id}"
-                                st.session_state.pop(parent_key, None)
-                                # Clear cache pokud existuje
+                                st.session_state["selected_project"] = st.session_state.get("add_task_project")
                                 st.cache_data.clear()
                                 st.rerun()
                 except Exception as e:
                     st.error(f"Chyba při přidávání úkolu:\n{str(e)}")
+# Obnovit vybraný projekt po přidání
+if "selected_project" in st.session_state:
+    st.session_state["add_task_project"] = st.session_state["selected_project"]
+    del st.session_state["selected_project"]
 # ──────────────────────────────────────────────────────────────
 # POTVRZENÍ PŘI KOLIZI MEZI PROJEKTY
 # ──────────────────────────────────────────────────────────────
@@ -303,17 +298,9 @@ if st.session_state.get("show_collision_confirm", False):
                     cc = len(get_children(pending["parent_id"]))
                     if cc > 1:
                         st.session_state["fork_warning"] = cc
-                # Vyčištění formuláře kromě projektu
-                for key in [
-                    "add_task_wp", "add_task_hours", "add_task_bodies",
-                    "add_task_active", "add_task_mode", "add_task_start",
-                    "add_task_notes"
-                ]:
-                    st.session_state.pop(key, None)
-                # Vyčištění parent key
-                parent_key = f"add_task_parent_{pending['project_id']}"
-                st.session_state.pop(parent_key, None)
-                # Clear cache pokud existuje
+                projects = get_projects()
+                name = next((n for pid, n, *_ in projects if pid == pending['project_id']), 'bez názvu')
+                st.session_state["selected_project"] = (f"{pending['project_id']} – {name or 'bez názvu'}", pending['project_id'])
                 st.cache_data.clear()
             for k in ["pending_task_data", "colliding_projects", "show_collision_confirm"]:
                 st.session_state.pop(k, None)
