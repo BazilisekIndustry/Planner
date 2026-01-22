@@ -56,57 +56,58 @@ for t in response.data:
         t['wp_name'] = get_workplace_name(t['workplace_id'])
         t['proj_name'] = get_project_name(t['project_id'])  # Použití nové funkce
         tasks.append(t)
-# Pokud žádný úkol, info
-if not tasks:
-    st.info("Žádné probíhající nebo nadcházející úkoly v následujících 7 dnech.")
-else:
-    # Data pro tabulku
-    data = []
-    for t in tasks:
-        start_date = datetime.strptime(t['start_date'], '%Y-%m-%d').date()
-        end_date = datetime.strptime(t['end_date'], '%Y-%m-%d').date()
-        if start_date > current_date:
-            status = f"Začíná {start_date.strftime('%d.%m.%Y')}"
-        elif start_date <= current_date <= end_date:
-            status = "Běží nyní"
-            if end_date == current_date:
-                status += " (končí dnes)"
-            elif end_date - current_date <= timedelta(days=1):
-                status += " (končí do 24h)"
-            elif end_date - current_date <= timedelta(days=7):
-                status += f" (končí {end_date.strftime('%d.%m.%Y')})"
-        else:
-            status = ""  # Nemělo by se stát díky filtru
-        data.append({
-            "Pracoviště": t['wp_name'],
-            "Projekt": t['proj_name'] or f"P{t['project_id']}",
-            "Úkol ID": t['id'],
-            "Start": t['start_date'],
-            "End": t['end_date'],
-            "Hodiny": t['hours'],
-            "Režim": t['capacity_mode'],
-            "Poznámka": t['notes'][:50] + "..." if t['notes'] else "",
-            "Kolize": "Ano" if check_collisions(t['id']) else "Ne",
-            "Status": status
-        })
-    df = pd.DataFrame(data)
-    # Interaktivní filtr
-    selected_wp = st.multiselect("Filtr pracovišť", options=wp_names, default=wp_names)
-    if selected_wp:
-        df = df[df['Pracoviště'].isin(selected_wp)]
-    # Notifikace a alerty
-    collisions = df[df['Kolize'] == 'Ano'].shape[0]
-    if collisions > 0:
-        st.warning(f"Detekováno {collisions} kolizí – zkontrolujte úkoly!")
-    running_now = df[df['Status'].str.contains("Běží nyní", na=False)].shape[0]
-    starting_soon = df[df['Status'].str.contains("Začíná", na=False)].shape[0]
-    ending_today = df[df['Status'].str.contains("končí dnes", na=False)].shape[0]
-    ending_soon = df[df['Status'].str.contains("končí do 24h", na=False)].shape[0]
-    if running_now > 0 or starting_soon > 0 or ending_today > 0 or ending_soon > 0:
-        st.info(f"Běžící nyní: {running_now} | Začínající brzy: {starting_soon} | Končící dnes: {ending_today} | Končící do 24h: {ending_soon}")
-    # Tabulka s AgGrid a selection pro detail
-    col1, col2 = st.columns([2, 1])  # Levý širší pro tabulku, pravý pro gauge
-    with col1:
+# Rozložení sloupců pro tabulku a gauge
+col1, col2 = st.columns([2, 1])  # Levý širší pro tabulku, pravý pro gauge
+# Tabulka úkolů (nezávisle na gauge)
+with col1:
+    if not tasks:
+        st.info("Žádné probíhající nebo nadcházející úkoly v následujících 7 dnech.")
+    else:
+        # Data pro tabulku
+        data = []
+        for t in tasks:
+            start_date = datetime.strptime(t['start_date'], '%Y-%m-%d').date()
+            end_date = datetime.strptime(t['end_date'], '%Y-%m-%d').date()
+            if start_date > current_date:
+                status = f"Začíná {start_date.strftime('%d.%m.%Y')}"
+            elif start_date <= current_date <= end_date:
+                status = "Běží nyní"
+                if end_date == current_date:
+                    status += " (končí dnes)"
+                elif end_date - current_date <= timedelta(days=1):
+                    status += " (končí do 24h)"
+                elif end_date - current_date <= timedelta(days=7):
+                    status += f" (končí {end_date.strftime('%d.%m.%Y')})"
+            else:
+                status = ""  # Nemělo by se stát díky filtru
+            data.append({
+                "Pracoviště": t['wp_name'],
+                "Projekt": t['proj_name'] or f"P{t['project_id']}",
+                "Úkol ID": t['id'],
+                "Start": t['start_date'],
+                "End": t['end_date'],
+                "Hodiny": t['hours'],
+                "Režim": t['capacity_mode'],
+                "Poznámka": t['notes'][:50] + "..." if t['notes'] else "",
+                "Kolize": "Ano" if check_collisions(t['id']) else "Ne",
+                "Status": status
+            })
+        df = pd.DataFrame(data)
+        # Interaktivní filtr
+        selected_wp = st.multiselect("Filtr pracovišť", options=wp_names, default=wp_names)
+        if selected_wp:
+            df = df[df['Pracoviště'].isin(selected_wp)]
+        # Notifikace a alerty
+        collisions = df[df['Kolize'] == 'Ano'].shape[0]
+        if collisions > 0:
+            st.warning(f"Detekováno {collisions} kolizí – zkontrolujte úkoly!")
+        running_now = df[df['Status'].str.contains("Běží nyní", na=False)].shape[0]
+        starting_soon = df[df['Status'].str.contains("Začíná", na=False)].shape[0]
+        ending_today = df[df['Status'].str.contains("končí dnes", na=False)].shape[0]
+        ending_soon = df[df['Status'].str.contains("končí do 24h", na=False)].shape[0]
+        if running_now > 0 or starting_soon > 0 or ending_today > 0 or ending_soon > 0:
+            st.info(f"Běžící nyní: {running_now} | Začínající brzy: {starting_soon} | Končící dnes: {ending_today} | Končící do 24h: {ending_soon}")
+        # Tabulka s AgGrid a selection pro detail
         st.subheader("Probíhající a nadcházející úkoly (dnes + následujících 7 dní)")
         gb = GridOptionsBuilder.from_dataframe(df)
         gb.configure_selection('single', use_checkbox=True)
@@ -136,8 +137,7 @@ else:
                     st.write(f"Režim: {selected_task['capacity_mode']}")
                     st.write(f"Poznámka: {selected_task['notes']}")
                     # Přidej další detaily podle potřeby
-    # Export dat (Excel)
-    with col1:
+        # Export dat (Excel)
         output = BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:  # Pokud chceš změnit, nahraď na 'xlsxwriter'
             df.to_excel(writer, index=False, sheet_name='Úkoly dnes + 7 dní')
@@ -148,65 +148,65 @@ else:
             file_name=f"ukoly_{current_date_str}_plus7.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
-    # Analogový ukazatel využití (Plotly Gauge – celkové do konce roku)
-    with col2:
-        st.subheader("Celkové využití komor do konce roku")
-        
-        # Definice konce roku
-        now = datetime.now()
-        end_of_year = datetime(now.year, 12, 31).date()
-        days_to_eoy = (end_of_year - now.date()).days + 1  # Vč. dnes
-        
-        # Načtení svátků
-        holidays_set = set(get_holidays(now.year))  # Pro aktuální rok
-        
-        # Počet dostupných pracovních dnů (zohlední svátky a víkendy)
-        available_days = 0
-        current_day = now.date()
-        for _ in range(days_to_eoy):
-            if is_working_day(current_day, mode='24'):  # Pro max kapacitu – vč. víkendů pokud mode=24 (nebo uprav na vždy True pro full 365)
-                available_days += 1
-            current_day += timedelta(days=1)
-        
-        # Celková dostupná kapacita: pracoviště * dny * 24 h/den
-        total_wp = len(workplaces)
-        max_hours_per_day = 24.0  # Max kapacita (uprav na 7.5 pokud chceš konzervativní)
-        total_capacity = total_wp * available_days * max_hours_per_day
-        
-        # Celkové bookované hodiny: sum hours všech relevantních úkolů
-        booked_hours = 0.0
-        for t in response.data:  # Z předchozího query na všechny úkoly
-            if t['status'] != 'canceled' and t['start_date'] and t['end_date']:
-                end = datetime.strptime(t['end_date'], '%Y-%m-%d').date()
-                if end >= now.date():
-                    booked_hours += t['hours']
-        
-        # Procento využití
-        utilization = (booked_hours / total_capacity) * 100 if total_capacity > 0 else 0
-        
-        # Gauge fig (beze změny)
-        fig = go.Figure(go.Indicator(
-            mode="gauge+number",
-            value=utilization,
-            domain={'x': [0, 1], 'y': [0, 1]},
-            title={'text': "Využití (%)"},
-            gauge={
-                'axis': {'range': [0, 100]},
-                'bar': {'color': "darkblue"},
-                'steps': [
-                    {'range': [0, 50], 'color': "lightgreen"},
-                    {'range': [50, 80], 'color': "yellow"},
-                    {'range': [80, 100], 'color': "red"}
-                ],
-                'threshold': {
-                    'line': {'color': "red", 'width': 4},
-                    'thickness': 0.75,
-                    'value': 90
-                }
+# Analogový ukazatel využití (Plotly Gauge – celkové do konce roku) – teď mimo else, aby se zobrazil vždy
+with col2:
+    st.subheader("Celkové využití komor do konce roku")
+    
+    # Definice konce roku
+    now = datetime.now()
+    end_of_year = datetime(now.year, 12, 31).date()
+    days_to_eoy = (end_of_year - now.date()).days + 1  # Vč. dnes
+    
+    # Načtení svátků
+    holidays_set = set(get_holidays(now.year))  # Pro aktuální rok
+    
+    # Počet dostupných pracovních dnů (zohlední svátky a víkendy)
+    available_days = 0
+    current_day = now.date()
+    for _ in range(days_to_eoy):
+        if is_working_day(current_day, mode='24'):  # Pro max kapacitu – vč. víkendů pokud mode=24 (nebo uprav na vždy True pro full 365)
+            available_days += 1
+        current_day += timedelta(days=1)
+    
+    # Celková dostupná kapacita: pracoviště * dny * 24 h/den
+    total_wp = len(workplaces)
+    max_hours_per_day = 24.0  # Max kapacita (uprav na 7.5 pokud chceš konzervativní)
+    total_capacity = total_wp * available_days * max_hours_per_day
+    
+    # Celkové bookované hodiny: sum hours všech relevantních úkolů
+    booked_hours = 0.0
+    for t in response.data:  # Z předchozího query na všechny úkoly
+        if t['status'] != 'canceled' and t['start_date'] and t['end_date']:
+            end = datetime.strptime(t['end_date'], '%Y-%m-%d').date()
+            if end >= now.date():
+                booked_hours += t['hours']
+    
+    # Procento využití
+    utilization = (booked_hours / total_capacity) * 100 if total_capacity > 0 else 0
+    
+    # Gauge fig (beze změny)
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=utilization,
+        domain={'x': [0, 1], 'y': [0, 1]},
+        title={'text': "Využití (%)"},
+        gauge={
+            'axis': {'range': [0, 100]},
+            'bar': {'color': "darkblue"},
+            'steps': [
+                {'range': [0, 50], 'color': "lightgreen"},
+                {'range': [50, 80], 'color': "yellow"},
+                {'range': [80, 100], 'color': "red"}
+            ],
+            'threshold': {
+                'line': {'color': "red", 'width': 4},
+                'thickness': 0.75,
+                'value': 90
             }
-        ))
-        fig.update_layout(height=250, margin={'l': 20, 'r': 20, 't': 50, 'b': 20})
-        st.plotly_chart(fig, use_container_width=True)
+        }
+    ))
+    fig.update_layout(height=250, margin={'l': 20, 'r': 20, 't': 50, 'b': 20})
+    st.plotly_chart(fig, use_container_width=True)
 # Nové: Nejvytíženější pracoviště na příštích 14 dní
 st.subheader("Nejvytíženější pracoviště na příštích 14 dní")
 start_date = current_date + timedelta(days=1)
