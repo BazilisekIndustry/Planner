@@ -108,28 +108,32 @@ if st.session_state.get("project_added_success", False):
 # ──────────────────────────────
 with col2:
     st.subheader("Přidat úkol")
+    projects = get_projects()
+    if not projects:
+        st.warning("Neexistuje žádný projekt. Nejprve vytvořte projekt vlevo.")
+        project_id = None
+    else:
+        display_options = [
+            (f"{pid} – {name or 'bez názvu'}", pid)
+            for pid, name, *_ in projects
+        ]
+        def reset_parent_selection():
+            st.session_state.pop("add_task_parent", None)
+        selected_option = st.selectbox(
+            "Projekt",
+            options=display_options,
+            format_func=lambda x: x[0],
+            index=0,
+            key="add_task_project",
+            on_change=reset_parent_selection
+        )
+        if selected_option:
+            project_id = selected_option[1]
+        else:
+            project_id = None
     with st.form(key="add_task_form", clear_on_submit=False):
         colA, colB = st.columns(2)
         with colA:
-            projects = get_projects()
-            if not projects:
-                st.warning("Neexistuje žádný projekt. Nejprve vytvořte projekt vlevo.")
-                project_id = None
-            else:
-                display_options = [
-                    (f"{pid} – {name or 'bez názvu'}", pid)
-                    for pid, name, *_ in projects
-                ]
-                def reset_parent_selection():
-                    st.session_state.pop("add_task_parent", None)
-                _, project_id = st.selectbox(
-                    "Projekt",
-                    options=display_options,
-                    format_func=lambda x: x[0],
-                    index=0,
-                    key="add_task_project",
-                    on_change=reset_parent_selection
-                )
             parent_id = None
             if project_id:
                 possible_parents = get_tasks(project_id)
@@ -268,9 +272,8 @@ with col2:
                                     "add_task_notes"
                                 ]:
                                     st.session_state.pop(key, None)
-                                # Vyčištění parent key - protože je dynamický, ale pro jistotu
-                                parent_key = f"add_task_parent_{project_id}"
-                                st.session_state.pop(parent_key, None)
+                                # Vyčištění parent key
+                                st.session_state.pop("add_task_parent", None)
                                 # Clear cache pokud existuje
                                 st.cache_data.clear()
                                 st.rerun()
@@ -314,8 +317,7 @@ if st.session_state.get("show_collision_confirm", False):
                 ]:
                     st.session_state.pop(key, None)
                 # Vyčištění parent key
-                parent_key = f"add_task_parent_{pending['project_id']}"
-                st.session_state.pop(parent_key, None)
+                st.session_state.pop("add_task_parent", None)
                 # Clear cache pokud existuje
                 st.cache_data.clear()
             for k in ["pending_task_data", "colliding_projects", "show_collision_confirm"]:
