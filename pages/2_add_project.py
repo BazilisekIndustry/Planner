@@ -120,12 +120,15 @@ with col2:
                     (f"{pid} – {name or 'bez názvu'}", pid)
                     for pid, name, *_ in projects
                 ]
+                def reset_parent_selection():
+                    st.session_state.pop("add_task_parent", None)
                 _, project_id = st.selectbox(
                     "Projekt",
                     options=display_options,
                     format_func=lambda x: x[0],
                     index=0,
-                    key="add_task_project"
+                    key="add_task_project",
+                    on_change=reset_parent_selection
                 )
             parent_id = None
             if project_id:
@@ -139,7 +142,7 @@ with col2:
                 parent_choice = st.selectbox(
                     "Nadřazený úkol (větev)",
                     parent_options,
-                    key=f"add_task_parent_{project_id}"
+                    key="add_task_parent"
                 )
                 if parent_choice != "Žádný (root)":
                     idx = parent_options.index(parent_choice) - 1
@@ -333,7 +336,7 @@ if st.session_state.get("task_added_success", False):
         f"**Úkol úspěšně přidán!** ✅\n\n"
         f"Projekt: **{d['project']}**\n"
         f"Pracoviště: **{d['workplace']}**\n"
-        f"Hodiny: **{d['hours']}**   |   Režim: **{d['mode']}**\n"
+        f"Hodiny: **{d['hours']}**   |   Režim: **{d['mode']}**\n"
         f"Začátek: **{d['start']}**"
     )
     st.toast("Nový úkol je připraven!", icon="🎉")
