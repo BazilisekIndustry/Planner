@@ -8,7 +8,7 @@ from utils.auth_simple import check_login  # Předpokládám tvůj auth
 from utils.common import *  # Tvé funkce: supabase, get_workplaces, get_tasks, get_workplace_name, get_holidays, atd.
 import time  # Pro aktualizaci času
 from io import BytesIO  # Pro export Excel
-from st_aggrid import AgGrid, GridOptionsBuilder
+from st_aggrid import AgGrid, GridOptionsBuilder  # Správný import po instalaci streamlit-aggrid
 
 st.set_page_config(page_title="Plánovač HK", layout="wide")
 
@@ -149,13 +149,43 @@ else:
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
-    # Analogový ukazatel využití (Plotly Gauge – vypadá jako tachometr)
+    # Analogový ukazatel využití (Plotly Gauge – celkové do konce roku)
     with col2:
-        st.subheader("Celkové využití komor")
-        # Výpočet celkového využití (např. procento obsazených pracovišť)
+        st.subheader("Celkové využití komor do konce roku")
+        
+        # Definice konce roku
+        now = datetime.now()
+        end_of_year = datetime(now.year, 12, 31).date()
+        days_to_eoy = (end_of_year - now.date()).days + 1  # Vč. dnes
+        
+        # Načtení svátků
+        holidays_set = set(get_holidays(now.year))  # Pro aktuální rok
+        
+        # Počet dostupných pracovních dnů (zohlední svátky a víkendy)
+        available_days = 0
+        current_day = now.date()
+        for _ in range(days_to_eoy):
+            if is_working_day(current_day, mode='24'):  # Pro max kapacitu – vč. víkendů pokud mode=24 (nebo uprav na vždy True pro full 365)
+                available_days += 1
+            current_day += timedelta(days=1)
+        
+        # Celková dostupná kapacita: pracoviště * dny * 24 h/den
         total_wp = len(workplaces)
-        busy_wp = len(set(t['workplace_id'] for t in tasks))
-        utilization = (busy_wp / total_wp) * 100 if total_wp > 0 else 0
+        max_hours_per_day = 24.0  # Max kapacita (uprav na 7.5 pokud chceš konzervativní)
+        total_capacity = total_wp * available_days * max_hours_per_day
+        
+        # Celkové bookované hodiny: sum hours všech relevantních úkolů
+        booked_hours = 0.0
+        for t in response.data:  # Z předchozího query na všechny úkoly
+            if t['status'] != 'canceled' and t['start_date'] and t['end_date']:
+                end = datetime.strptime(t['end_date'], '%Y-%m-%d').date()
+                if end >= now.date():
+                    booked_hours += t['hours']
+        
+        # Procento využití
+        utilization = (booked_hours / total_capacity) * 100 if total_capacity > 0 else 0
+        
+        # Gauge fig (beze změny)
         fig = go.Figure(go.Indicator(
             mode="gauge+number",
             value=utilization,
