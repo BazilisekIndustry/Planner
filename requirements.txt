@@ -7,3 +7,4 @@ plotly
 pandas
 streamlit-aggrid
 supabase
+openpyxl
