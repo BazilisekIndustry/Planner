@@ -9,54 +9,42 @@ from utils.common import *  # Tvé funkce: supabase, get_workplaces, get_tasks, 
 import time  # Pro aktualizaci času
 from io import BytesIO  # Pro export Excel
 from st_aggrid import AgGrid, GridOptionsBuilder  # Správný import po instalaci streamlit-aggrid
-
 st.set_page_config(page_title="Plánovač HK", layout="wide")
-
 # Kontrola přihlášení (nový způsob)
 if not check_login():
     st.switch_page("Home.py")
     st.stop()
-
 # Uživatelská data – teď už máš vše v session_state
 username = st.session_state.get("username", "neznámý")
 name = st.session_state.get("name", "Uživatel")
 role = st.session_state.get("role", "viewer")
 read_only = (role == "viewer")
-
 render_sidebar("Přehledový dashboard")
-
 # Funkce pro aktualizaci času každou minutu
 def update_time():
     now = datetime.now()
     current_date_str = now.strftime("%d.%m.%Y")
     current_time_str = now.strftime("%H:%M")
     return current_date_str, current_time_str
-
 # Inicializace session_state pro timer
 if 'last_update' not in st.session_state:
     st.session_state.last_update = time.time()
-
 # Hlavní obsah
 st.header("Přehledový dashboard")
-
 # Aktuální datum a čas (lokalizováno pro CZ)
 current_date_str, current_time_str = update_time()
 st.markdown(f"**Aktuální datum:** {current_date_str} | **Čas:** {current_time_str}")
-
 # Automatická aktualizace každých 60 sekund
 current_time = time.time()
 if current_time - st.session_state.last_update >= 60:
     st.session_state.last_update = current_time
     st.rerun()
-
 # Načtení dat pro tabulku
 current_date = datetime.now().date()  # Pouze date pro porovnání
-
 # Získej všechna pracoviště
 workplaces = get_workplaces()  # [(id, name)]
 wp_names = [wp[1] for wp in workplaces]
 wp_dict = {wp[1]: wp[0] for wp in workplaces}  # Pro filtr
-
 # Získej všechny aktivní úkoly (ne canceled, s daty)
 tasks = []
 response = supabase.table('tasks').select('*').not_.is_('start_date', 'null').not_.is_('end_date', 'null').neq('status', 'canceled').execute()
@@ -67,7 +55,6 @@ for t in response.data:
         t['wp_name'] = get_workplace_name(t['workplace_id'])
         t['proj_name'] = get_project_name(t['project_id'])  # Použití nové funkce
         tasks.append(t)
-
 # Pokud žádný úkol, info
 if not tasks:
     st.info("Žádné probíhající úkoly dnes.")
@@ -88,22 +75,18 @@ else:
             "Status": status
         })
     df = pd.DataFrame(data)
-
     # Interaktivní filtr
     selected_wp = st.multiselect("Filtr pracovišť", options=wp_names, default=wp_names)
     if selected_wp:
         df = df[df['Pracoviště'].isin(selected_wp)]
-
     # Notifikace a alerty
     collisions = df[df['Kolize'] == 'Ano'].shape[0]
     if collisions > 0:
         st.warning(f"Detekováno {collisions} kolizí – zkontrolujte úkoly!")
-
     ending_today = df[df['Status'] == 'Končí dnes'].shape[0]
     ending_soon = df[df['Status'] == 'Končí do 24h'].shape[0]
     if ending_today > 0 or ending_soon > 0:
         st.info(f"Úkoly končící dnes: {ending_today} | Končící do 24h: {ending_soon}")
-
     # Tabulka s AgGrid a selection pro detail
     col1, col2 = st.columns([2, 1])  # Levý širší pro tabulku, pravý pro gauge
     with col1:
@@ -119,7 +102,6 @@ else:
             fit_columns_on_grid_load=True,
             theme="streamlit"
         )
-
         # Detailní view na klik (expander)
         selected_rows = grid_response.get('selected_rows', [])
         if isinstance(selected_rows, pd.DataFrame):
@@ -137,7 +119,6 @@ else:
                     st.write(f"Režim: {selected_task['capacity_mode']}")
                     st.write(f"Poznámka: {selected_task['notes']}")
                     # Přidej další detaily podle potřeby
-
     # Export dat (Excel)
     with col1:
         output = BytesIO()
@@ -150,7 +131,6 @@ else:
             file_name=f"ukoly_{current_date_str}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
-
     # Analogový ukazatel využití (Plotly Gauge – celkové do konce roku)
     with col2:
         st.subheader("Celkové využití komor do konce roku")
@@ -210,7 +190,6 @@ else:
         ))
         fig.update_layout(height=250, margin={'l': 20, 'r': 20, 't': 50, 'b': 20})
         st.plotly_chart(fig, use_container_width=True)
-
 # Nové: Nejvytíženější pracoviště na příštích 14 dní
 st.subheader("Nejvytíženější pracoviště na příštích 14 dní")
 start_date = current_date + timedelta(days=1)
@@ -243,15 +222,18 @@ else:
     
     top_df = pd.DataFrame(top_data)
     st.dataframe(top_df, use_container_width=True)
-
 # Nové: Tlačítko pro heatmap prognózy na 30/90 dní
 if st.button("Zobrazit prognózu zatížení na 30/90 dní"):
     st.subheader("Prognóza zatížení pracovišť (heatmap)")
-    # Načtení svátků
-    holidays = get_holidays(current_date.year)  # Opraveno: Přidán rok
-    holidays_set = set(holidays)  # Pro rychlé kontrolu
-
-    # Funkce pro počet pracovních dnů
+    # Načtení svátků pro aktuální rok (a případně sousední, ale get_holidays vrací jen pro year)
+    now = datetime.now()
+    holidays_set = set(get_holidays(now.year))
+    if now.month == 12:
+        holidays_set.update(get_holidays(now.year + 1))
+    elif now.month == 1:
+        holidays_set.update(get_holidays(now.year - 1))
+    
+    # Funkce pro počet pracovních dnů (už máš v common.py, ale pro úplnost)
     def count_workdays(start, days):
         count = 0
         for d in range(days):
@@ -259,37 +241,82 @@ if st.button("Zobrazit prognózu zatížení na 30/90 dní"):
             if day.weekday() < 5 and day not in holidays_set:  # Pondělí-Pátek, ne svátek
                 count += 1
         return count
-
-    # Výpočet pro příštích 30 a 90 dní (podobně jako v HMG roční, ale pro budoucnost)
+    
     forecast_periods = [30, 90]
     for days in forecast_periods:
         st.markdown(f"### Na příštích {days} dní")
+        start_forecast = current_date + timedelta(days=1)
         end_forecast = current_date + timedelta(days=days)
-        occupancy = {wp[1]: 0.0 for wp in workplaces}  # Inicializace s names
+        
+        # Svátky v období
+        holidays_in_period = sum(1 for d in range(days) if (start_forecast + timedelta(days=d)) in holidays_set)
+        
+        # Všechny úkoly v období (přesný overlap)
         forecast_tasks = []
-        for t in response.data:
+        for t in response.data:  # Použijeme všechny tasks z předchozího query
+            if t['status'] == 'canceled' or not t['start_date'] or not t['end_date']:
+                continue
             start = datetime.strptime(t['start_date'], '%Y-%m-%d').date()
             end = datetime.strptime(t['end_date'], '%Y-%m-%d').date()
-            if end >= current_date and start <= end_forecast:
+            if end >= start_forecast and start <= end_forecast:
                 forecast_tasks.append(t)
-        total_workdays = count_workdays(current_date + timedelta(days=1), days)  # Od zítřka
+        
+        # Celkové pracovní dny v období
+        total_workdays = count_workdays(start_forecast, days)
         if total_workdays == 0:
             total_workdays = 1  # Aby nedošlo k dělení nulou
+        
+        # Výpočet průměrné denní zátěže po pracovištích (v %)
+        from collections import defaultdict
+        occupancy = defaultdict(float)  # wp_name → součet daily_load_pct přes úkoly
+        
         for t in forecast_tasks:
             wp_name = get_workplace_name(t['workplace_id'])
-            if wp_name in occupancy:
-                # Přibližný výpočet: hodiny / pracovní dny
-                occupancy[wp_name] += t['hours'] / total_workdays  # Průměrná denní zátěž
-        # Data pro heatmap
+            start_t = datetime.strptime(t['start_date'], '%Y-%m-%d').date()
+            end_t = datetime.strptime(t['end_date'], '%Y-%m-%d').date()
+            
+            # Overlap s prognózou
+            overlap_start = max(start_t, start_forecast)
+            overlap_end = min(end_t, end_forecast)
+            if overlap_start > overlap_end:
+                continue  # Žádný overlap
+            
+            overlap_days = (overlap_end - overlap_start).days + 1
+            overlap_workdays = 0
+            current_day = overlap_start
+            for _ in range(overlap_days):
+                if is_working_day(current_day, t['capacity_mode']):  # Zohlední mode (7.5 nebo 24)
+                    overlap_workdays += 1
+                current_day += timedelta(days=1)
+            
+            if overlap_workdays > 0:
+                # Předpoklad rovnoměrného rozložení hodin v úkolu
+                total_task_days = (end_t - start_t).days + 1
+                daily_load = t['hours'] / total_task_days
+                # Max kapacita podle mode
+                max_capacity = 7.5 if t['capacity_mode'] == '7.5' else 24.0
+                # Procentuální příspěvek: (daily_load / max_capacity) * 100
+                daily_load_pct = (daily_load / max_capacity) * 100
+                # Přidat vážený příspěvek
+                occupancy[wp_name] += daily_load_pct * (overlap_workdays / total_workdays)
+        
+        if not occupancy:
+            st.info("Žádná zatížení v tomto období.")
+            continue
+        
+        # Data pro heatmap (seřazené sestupně podle zátěže)
         heatmap_data = pd.DataFrame({
             "Pracoviště": list(occupancy.keys()),
-            "Průměrná denní zátěž (hodiny)": list(occupancy.values())
-        })
+            "Průměrná denní zátěž (%)": list(occupancy.values())
+        }).sort_values(by="Průměrná denní zátěž (%)", ascending=False)
+        
         fig = px.imshow(
             heatmap_data.set_index("Pracoviště"),
             color_continuous_scale="YlOrRd",  # Žlutá-oranžová-červená
-            title=f"Prognóza na {days} dní (zohledněno {len(holidays_set)} svátků)",
-            aspect="auto"
+            title=f"Prognóza na {days} dní (zohledněno {holidays_in_period} svátků)",
+            aspect="auto",
+            zmin=0,  # Fix škály pro %
+            zmax=100  # Max 100%
         )
         fig.update_layout(height=300 + len(workplaces) * 20)
         st.plotly_chart(fig, use_container_width=True)
