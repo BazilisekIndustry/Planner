@@ -48,26 +48,41 @@ wp_dict = {wp[1]: wp[0] for wp in workplaces}  # Pro filtr
 # Získej všechny aktivní úkoly (ne canceled, s daty)
 tasks = []
 response = supabase.table('tasks').select('*').not_.is_('start_date', 'null').not_.is_('end_date', 'null').neq('status', 'canceled').execute()
+end_period = current_date + timedelta(days=7)  # Následujících 7 dní včetně dnes
 for t in response.data:
     start = datetime.strptime(t['start_date'], '%Y-%m-%d').date()
     end = datetime.strptime(t['end_date'], '%Y-%m-%d').date()
-    if start <= current_date <= end:
+    if end >= current_date and start <= end_period:  # Úkoly běžící dnes nebo končící později, ale start do 7 dnů
         t['wp_name'] = get_workplace_name(t['workplace_id'])
         t['proj_name'] = get_project_name(t['project_id'])  # Použití nové funkce
         tasks.append(t)
 # Pokud žádný úkol, info
 if not tasks:
-    st.info("Žádné probíhající úkoly dnes.")
+    st.info("Žádné probíhající nebo nadcházející úkoly v následujících 7 dnech.")
 else:
     # Data pro tabulku
     data = []
     for t in tasks:
+        start_date = datetime.strptime(t['start_date'], '%Y-%m-%d').date()
         end_date = datetime.strptime(t['end_date'], '%Y-%m-%d').date()
-        status = "Končí dnes" if end_date == current_date else ("Končí do 24h" if end_date - current_date <= timedelta(days=1) else "")
+        if start_date > current_date:
+            status = f"Začíná {start_date.strftime('%d.%m.%Y')}"
+        elif start_date <= current_date <= end_date:
+            status = "Běží nyní"
+            if end_date == current_date:
+                status += " (končí dnes)"
+            elif end_date - current_date <= timedelta(days=1):
+                status += " (končí do 24h)"
+            elif end_date - current_date <= timedelta(days=7):
+                status += f" (končí {end_date.strftime('%d.%m.%Y')})"
+        else:
+            status = ""  # Nemělo by se stát díky filtru
         data.append({
             "Pracoviště": t['wp_name'],
             "Projekt": t['proj_name'] or f"P{t['project_id']}",
             "Úkol ID": t['id'],
+            "Start": t['start_date'],
+            "End": t['end_date'],
             "Hodiny": t['hours'],
             "Režim": t['capacity_mode'],
             "Poznámka": t['notes'][:50] + "..." if t['notes'] else "",
@@ -83,14 +98,16 @@ else:
     collisions = df[df['Kolize'] == 'Ano'].shape[0]
     if collisions > 0:
         st.warning(f"Detekováno {collisions} kolizí – zkontrolujte úkoly!")
-    ending_today = df[df['Status'] == 'Končí dnes'].shape[0]
-    ending_soon = df[df['Status'] == 'Končí do 24h'].shape[0]
-    if ending_today > 0 or ending_soon > 0:
-        st.info(f"Úkoly končící dnes: {ending_today} | Končící do 24h: {ending_soon}")
+    running_now = df[df['Status'].str.contains("Běží nyní", na=False)].shape[0]
+    starting_soon = df[df['Status'].str.contains("Začíná", na=False)].shape[0]
+    ending_today = df[df['Status'].str.contains("končí dnes", na=False)].shape[0]
+    ending_soon = df[df['Status'].str.contains("končí do 24h", na=False)].shape[0]
+    if running_now > 0 or starting_soon > 0 or ending_today > 0 or ending_soon > 0:
+        st.info(f"Běžící nyní: {running_now} | Začínající brzy: {starting_soon} | Končící dnes: {ending_today} | Končící do 24h: {ending_soon}")
     # Tabulka s AgGrid a selection pro detail
     col1, col2 = st.columns([2, 1])  # Levý širší pro tabulku, pravý pro gauge
     with col1:
-        st.subheader("Probíhající úkoly na pracovištích")
+        st.subheader("Probíhající a nadcházející úkoly (dnes + následujících 7 dní)")
         gb = GridOptionsBuilder.from_dataframe(df)
         gb.configure_selection('single', use_checkbox=True)
         grid_options = gb.build()
@@ -123,12 +140,12 @@ else:
     with col1:
         output = BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:  # Pokud chceš změnit, nahraď na 'xlsxwriter'
-            df.to_excel(writer, index=False, sheet_name='Probíhající úkoly')
+            df.to_excel(writer, index=False, sheet_name='Úkoly dnes + 7 dní')
         output.seek(0)
         st.download_button(
             label="Exportovat jako Excel",
             data=output,
-            file_name=f"ukoly_{current_date_str}.xlsx",
+            file_name=f"ukoly_{current_date_str}_plus7.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
     # Analogový ukazatel využití (Plotly Gauge – celkové do konce roku)
@@ -297,7 +314,7 @@ if st.button("Zobrazit prognózu zatížení na 30/90 dní"):
                 max_capacity = 7.5 if t['capacity_mode'] == '7.5' else 24.0
                 # Procentuální příspěvek: (daily_load / max_capacity) * 100
                 daily_load_pct = (daily_load / max_capacity) * 100
-                # Přidat vážený příspěvek
+                # Přidat vážený příspěvek: (overlap_workdays / total_workdays)
                 occupancy[wp_name] += daily_load_pct * (overlap_workdays / total_workdays)
         
         if not occupancy:
