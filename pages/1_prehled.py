@@ -121,8 +121,10 @@ else:
         )
 
         # Detailní view na klik (expander)
-        selected_rows = grid_response['selected_rows']
-        if selected_rows:
+        selected_rows = grid_response.get('selected_rows', [])
+        if isinstance(selected_rows, pd.DataFrame):
+            selected_rows = selected_rows.to_dict('records')  # Převod na list dictů, pokud je to DataFrame
+        if selected_rows:  # Teď je to vždy list
             selected_task_id = selected_rows[0]['Úkol ID']
             selected_task = next((t for t in tasks if t['id'] == selected_task_id), None)
             if selected_task:
@@ -139,7 +141,7 @@ else:
     # Export dat (Excel)
     with col1:
         output = BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:  # Pokud chceš změnit, nahraď na 'xlsxwriter'
             df.to_excel(writer, index=False, sheet_name='Probíhající úkoly')
         output.seek(0)
         st.download_button(
