@@ -300,6 +300,11 @@ def detect_collisions_in_month(tasks_in_month):
 def get_project_choices():
     projects = get_projects()
     return [str(p[0]) for p in projects] if projects else []
+
+def get_project_name(project_id):
+    response = supabase.table('projects').select('name').eq('id', project_id).execute()
+    return response.data[0]['name'] if response.data else f"P{project_id}"
+
 def log_action(user, action, task_id, details):
     try:
         supabase.table('logs').insert({
