@@ -248,7 +248,7 @@ else:
 if st.button("Zobrazit prognózu zatížení na 30/90 dní"):
     st.subheader("Prognóza zatížení pracovišť (heatmap)")
     # Načtení svátků
-    holidays = get_holidays()  # Předpokládám, že vrací list dat (date objects)
+    holidays = get_holidays(current_date.year)  # Opraveno: Přidán rok
     holidays_set = set(holidays)  # Pro rychlé kontrolu
 
     # Funkce pro počet pracovních dnů
