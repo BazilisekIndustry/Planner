@@ -26,69 +26,67 @@ col1, col2 = st.columns([1, 1.4])
 # ──────────────────────────────
 with col1:
     st.subheader("Přidat projekt")
-    proj_id = st.text_input("Číslo projektu (povinné)", key="new_proj_id")
-    proj_name = st.text_input("Název projektu (volitelné)", key="new_proj_name")
-    colors_list = get_safe_project_colors()  # [ (label, hex), ... ]
-    color_labels = [label for label, _ in colors_list]
-    # Čistý selectbox bez HTML v položkách
-    selected_label = st.selectbox(
-        "Barva projektu",
-        options=color_labels,
-        index=0,
-        key="new_project_color_select"
-    )
-    # Najdeme vybranou barvu
-    selected_color = next(
-        (color for label, color in colors_list if label == selected_label),
-        "#4285F4"  # fallback
-    )
-    # Barevný čtvereček + název barvy vedle sebe (Varianta A)
-    st.markdown(
-        f'''
-        <div style="display: flex; align-items: center; gap: 12px; margin-top: -4px; margin-bottom: 8px;">
-            <div style="
-                width: 28px;
-                height: 28px;
-                background-color: {selected_color};
-                border-radius: 6px;
-                border: 1px solid #d0d0d0;
-                flex-shrink: 0;
-            "></div>
-            <span style="font-size: 15px; color: #333;">{selected_label}</span>
-        </div>
-        ''',
-        unsafe_allow_html=True
-    )
-    if st.button("Přidat projekt", type="primary", use_container_width=True):
-        proj_id_clean = proj_id.strip()
-        if not proj_id_clean:
-            st.error("Číslo projektu je povinné!")
-        else:
-            # Kontrola existence
-            exists = supabase.table("projects").select("id").eq("id", proj_id_clean).execute()
-            if exists.data:
-                st.error(f"Projekt s číslem **{proj_id_clean}** již existuje!")
+    with st.form(key="add_project_form", clear_on_submit=True):
+        proj_id = st.text_input("Číslo projektu (povinné)", key="new_proj_id")
+        proj_name = st.text_input("Název projektu (volitelné)", key="new_proj_name")
+        colors_list = get_safe_project_colors()  # [ (label, hex), ... ]
+        color_labels = [label for label, _ in colors_list]
+        # Čistý selectbox bez HTML v položkách
+        selected_label = st.selectbox(
+            "Barva projektu",
+            options=color_labels,
+            index=0,
+            key="new_project_color_select"
+        )
+        # Najdeme vybranou barvu
+        selected_color = next(
+            (color for label, color in colors_list if label == selected_label),
+            "#4285F4"  # fallback
+        )
+        # Barevný čtvereček + název barvy vedle sebe (Varianta A)
+        st.markdown(
+            f'''
+            <div style="display: flex; align-items: center; gap: 12px; margin-top: -4px; margin-bottom: 8px;">
+                <div style="
+                    width: 28px;
+                    height: 28px;
+                    background-color: {selected_color};
+                    border-radius: 6px;
+                    border: 1px solid #d0d0d0;
+                    flex-shrink: 0;
+                "></div>
+                <span style="font-size: 15px; color: #333;">{selected_label}</span>
+            </div>
+            ''',
+            unsafe_allow_html=True
+        )
+        submitted = st.form_submit_button("Přidat projekt", type="primary", use_container_width=True)
+        if submitted:
+            proj_id_clean = proj_id.strip()
+            if not proj_id_clean:
+                st.error("Číslo projektu je povinné!")
             else:
-                proj_name_clean = proj_name.strip() or None
-                try:
-                    success = add_project(
-                        project_id=proj_id_clean,
-                        name=proj_name_clean,
-                        color=selected_color
-                    )
-                    if success:
-                        st.session_state["project_added_success"] = True
-                        st.session_state["project_added_id"] = proj_id_clean
-                        # Vyčištění formuláře
-                        for key in ["new_proj_id", "new_proj_name", "new_project_color_select"]:
-                            st.session_state.pop(key, None)
-                        # Clear cache pokud existuje
-                        st.cache_data.clear()
-                        st.rerun()
-                    else:
-                        st.error("Nepodařilo se uložit projekt do databáze.")
-                except Exception as e:
-                    st.error(f"Chyba při přidávání projektu:\n{str(e)}")
+                # Kontrola existence
+                exists = supabase.table("projects").select("id").eq("id", proj_id_clean).execute()
+                if exists.data:
+                    st.error(f"Projekt s číslem **{proj_id_clean}** již existuje!")
+                else:
+                    proj_name_clean = proj_name.strip() or None
+                    try:
+                        success = add_project(
+                            project_id=proj_id_clean,
+                            name=proj_name_clean,
+                            color=selected_color
+                        )
+                        if success:
+                            st.session_state["project_added_success"] = True
+                            st.session_state["project_added_id"] = proj_id_clean
+                            st.cache_data.clear()
+                            st.rerun()
+                        else:
+                            st.error("Nepodařilo se uložit projekt do databáze.")
+                    except Exception as e:
+                        st.error(f"Chyba při přidávání projektu:\n{str(e)}")
 # Úspěšná hláška + balónky
 if st.session_state.get("project_added_success", False):
     pid = st.session_state["project_added_id"]
@@ -110,7 +108,7 @@ if st.session_state.get("project_added_success", False):
 # ──────────────────────────────
 with col2:
     st.subheader("Přidat úkol")
-    with st.form(key="add_task_form"):
+    with st.form(key="add_task_form", clear_on_submit=False):
         colA, colB = st.columns(2)
         with colA:
             projects = get_projects()
@@ -129,12 +127,6 @@ with col2:
                     index=0,
                     key="add_task_project"
                 )
-            # Reset parent selectbox při změně projektu
-            previous_project = st.session_state.get("previous_project", None)
-            if previous_project != project_id:
-                if "add_task_parent" in st.session_state:
-                    del st.session_state["add_task_parent"]
-                st.session_state["previous_project"] = project_id
             parent_id = None
             if project_id:
                 possible_parents = get_tasks(project_id)
@@ -147,7 +139,7 @@ with col2:
                 parent_choice = st.selectbox(
                     "Nadřazený úkol (větev)",
                     parent_options,
-                    key="add_task_parent"
+                    key=f"add_task_parent_{project_id}"
                 )
                 if parent_choice != "Žádný (root)":
                     idx = parent_options.index(parent_choice) - 1
@@ -270,9 +262,12 @@ with col2:
                                 for key in [
                                     "add_task_wp", "add_task_hours", "add_task_bodies",
                                     "add_task_active", "add_task_mode", "add_task_start",
-                                    "add_task_notes", "add_task_parent"
+                                    "add_task_notes"
                                 ]:
                                     st.session_state.pop(key, None)
+                                # Vyčištění parent key - protože je dynamický, ale pro jistotu
+                                parent_key = f"add_task_parent_{project_id}"
+                                st.session_state.pop(parent_key, None)
                                 # Clear cache pokud existuje
                                 st.cache_data.clear()
                                 st.rerun()
@@ -312,9 +307,12 @@ if st.session_state.get("show_collision_confirm", False):
                 for key in [
                     "add_task_wp", "add_task_hours", "add_task_bodies",
                     "add_task_active", "add_task_mode", "add_task_start",
-                    "add_task_notes", "add_task_parent"
+                    "add_task_notes"
                 ]:
                     st.session_state.pop(key, None)
+                # Vyčištění parent key
+                parent_key = f"add_task_parent_{pending['project_id']}"
+                st.session_state.pop(parent_key, None)
                 # Clear cache pokud existuje
                 st.cache_data.clear()
             for k in ["pending_task_data", "colliding_projects", "show_collision_confirm"]:
