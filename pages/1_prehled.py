@@ -8,7 +8,7 @@ from utils.auth_simple import check_login  # Předpokládám tvůj auth
 from utils.common import *  # Tvé funkce: supabase, get_workplaces, get_tasks, get_workplace_name, get_holidays, atd.
 import time  # Pro aktualizaci času
 from io import BytesIO  # Pro export Excel
-from streamlit_aggrid import AgGrid, GridOptionsBuilder  # Předpokládám, že máš streamlit-aggrid nainstalovaný
+from st_aggrid import AgGrid, GridOptionsBuilder
 
 st.set_page_config(page_title="Plánovač HK", layout="wide")
 
