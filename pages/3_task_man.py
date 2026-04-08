@@ -117,7 +117,7 @@ else:
                     "conflict-row": "params.data && params.data['Kolize'] && params.data['Kolize'].trim() !== ''"
                 }
             },
-            update_on=GridUpdateMode.VALUE_CHANGED,
+            update_on=['cellValueChanged'],
             data_return_mode=DataReturnMode.AS_INPUT,
             fit_columns_on_grid_load=True,
             theme="streamlit",
